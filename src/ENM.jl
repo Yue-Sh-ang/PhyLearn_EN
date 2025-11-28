@@ -39,7 +39,7 @@ function load_graph(filename)
         stiff = parse(Float64, cols[3])
         l0val = parse(Float64, cols[4])
 
-        edges[e] = (node1, node2)
+        edges[e] = (node1+1, node2+1)
         stiffness[e] = stiff
         l0[e] = l0val
 

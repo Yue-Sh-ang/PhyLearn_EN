@@ -67,7 +67,7 @@ function update_info!(tr::Trainer_CL)
     end
 
     # update current free strains on output edges
-    for edge,_,_,current_strain in tr.output
+    for (edge,_,_,current_strain) in tr.output
         current_strain += cal_strain_f(tr, edge)
     end
 
