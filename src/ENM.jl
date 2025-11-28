@@ -82,7 +82,7 @@ function ENM(filename; m=1.0, T0=0.0,seed=123)
                m)
 end
 
-function calc_elastic_force!(enm::ENM)
+function cal_elastic_force!(enm::ENM)
     fill!(enm.force, 0.0)
 
     @inbounds for i in 1:enm.ne
@@ -101,10 +101,54 @@ function calc_elastic_force!(enm::ENM)
         enm.force[u, :] .+= fvec
         enm.force[v, :] .-= fvec
     end
+
+end
+
+function cal_elastic_energy(enm::ENM)
+    E = 0.0
+
+    @inbounds for i in 1:enm.ne
+        (u,v) = enm.edges[i]
+
+        dx = enm.pts[v, :] .- enm.pts[u, :]
+        dist = norm(dx)
+
+        if dist == 0
+            continue
+        end
+
+        delta = dist - enm.l0[i]
+        E += 0.5 * enm.k[i] * delta^2
+    end
+
+    return E
+end
+
+function cal_kinetic_energy(enm::ENM)
+    KE = 0.0
+    @inbounds for i in 1:enm.n
+        KE += 0.5 * enm.m * sum(enm.vel[i, :].^2)
+    end
+    return KE
+end
+
+function cal_strain(enm::ENM, edge::Int)
+    (u, v) = enm.edges[edge]
+    dx = enm.pts[v, :] .- enm.pts[u, :]
+    dist = norm(dx)
+    l0 = enm.l0[edge]
+    return (dist - l0) / l0
+end
+
+function put_stain!(enm::ENM, edge::Int, strain::Float64;k=100)
+    enm.l0[edge] *= (1 + strain)
+    enm.k[edge] = k
+    return nothing
 end
 
 function reset_config!(enm::ENM)
     enm.pts .= enm.pts0
+    return nothing
 end
 
 function run_md!(enm::ENM,T; steps=1, dt=0.005, seed=nothing, tau=1.0)
@@ -120,7 +164,7 @@ function run_md!(enm::ENM,T; steps=1, dt=0.005, seed=nothing, tau=1.0)
     for _ in 1:steps
         
         # ---- 1st half-step ----
-        calc_elastic_force!(enm)
+        cal_elastic_force!(enm)
         Ft = copy(enm.force)
 
         rand1 = sigma == 0 ? zeros(enm.n,3) : randn(enm.n,3)
@@ -132,7 +176,7 @@ function run_md!(enm::ENM,T; steps=1, dt=0.005, seed=nothing, tau=1.0)
         @. enm.pts += dt * enm.vel
 
         # ---- 2nd half-step ----
-        calc_elastic_force!(enm)
+        cal_elastic_force!(enm)
         Ftp = copy(enm.force)
 
         rand2 = sigma == 0 ? zeros(enm.n,3) : randn(enm.n,3)
@@ -142,7 +186,74 @@ function run_md!(enm::ENM,T; steps=1, dt=0.005, seed=nothing, tau=1.0)
     end
 end
 
-function calc_elastic_jacobian(enm::ENM)
+function quench_fire!(enm::ENM; dt::Float64=0.005, max_steps::Int=100_000, force_tol::Float64=1e-6)
+
+    # FIRE parameters
+    α     = 0.1; finc  = 1.1
+    fdec  = 0.5; αdec  = 0.99
+    dtmax = 10dt; Nmin  = 5
+    Npos  = 0
+
+    # unpack
+    pts  = enm.pts; vel  = enm.vel
+    F    = enm.force; m    = enm.m
+    n    = enm.n
+
+    for step in 1:max_steps
+
+        cal_elastic_force!(enm)
+
+        maxF = maximum(abs.(F))
+        if maxF < force_tol
+            return (:converged, step, maxF)
+        end
+
+        
+        # Velocity update (Euler)
+        
+        @inbounds for i in 1:n
+            vel[i,1] += dt * F[i,1] / m
+            vel[i,2] += dt * F[i,2] / m
+            vel[i,3] += dt * F[i,3] / m
+        end
+
+        # Fire Power
+        P = sum(vel .* F)
+
+        if P > 0
+            Npos += 1
+            if Npos > Nmin
+                dt = min(dt * finc, dtmax)
+                α *= αdec
+            end
+        else
+            # negative power → reset
+            Npos = 0
+            dt *= fdec
+            α = 0.1
+            fill!(vel, 0.0)
+        end
+
+       
+        # Velocity mixing
+        vnorm = sqrt(sum(vel.^2))
+        fnorm = sqrt(sum(F.^2))
+
+        if vnorm > 0 && fnorm > 0
+            mix = α * fnorm / vnorm
+            vel .= (1 - α) .* vel .+ mix .* F
+        end
+
+
+        # Position update
+        pts .+= dt .* vel
+    end
+
+    return (:max_steps_reached, max_steps, maximum(abs.(F)))
+end
+
+
+function cal_elastic_jacobian(enm::ENM)
     J = zeros(3*enm.n, 3*enm.n)
 
     @inbounds for i in 1:enm.ne
@@ -171,8 +282,8 @@ function calc_elastic_jacobian(enm::ENM)
     return J
 end
 
-function calc_modes(enm::ENM)
-    J = calc_elastic_jacobian(enm)
+function cal_modes(enm::ENM)
+    J = cal_elastic_jacobian(enm)
     eigen(J)
 end
 

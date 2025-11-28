@@ -1,5 +1,0 @@
-[deps]
-PhyLearn_EN = "810f855e-60da-4232-bec9-eecd65aaa80f"
-
-[sources]
-PhyLearn_EN = {path = ".."}
