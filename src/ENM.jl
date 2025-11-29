@@ -75,7 +75,7 @@ function ENM(filename; m=1.0, T0=0.0,seed=123)
     # initial velocities
     Random.seed!(seed)
     for i in 1:n
-        vel[i, :] = randn(3) * sqrt(2*T0/m)
+        vel[i, :] = randn(3) * sqrt(T0/m)
     end
 
     return ENM(n, ne, pts0,pts, vel, force, edges, kvec, lvec,
