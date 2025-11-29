@@ -167,8 +167,8 @@ function run_md!(enm::ENM,T; steps=1, dt=0.005, seed=nothing, tau=1.0)
         cal_elastic_force!(enm)
         Ft = copy(enm.force)
 
-        rand1 = sigma == 0 ? zeros(enm.n,3) : randn(enm.n,3)
-        Flan1 = @. -(m/τ)*enm.vel + sigma*rand1
+        rand = sigma == 0 ? zeros(enm.n,3) : randn(enm.n,3)
+        Flan1 = @. -(m/τ)*enm.vel + sigma*rand
 
         @. enm.vel += 0.5*dt * (Ft + Flan1) / m
 
@@ -179,8 +179,8 @@ function run_md!(enm::ENM,T; steps=1, dt=0.005, seed=nothing, tau=1.0)
         cal_elastic_force!(enm)
         Ftp = copy(enm.force)
 
-        rand2 = sigma == 0 ? zeros(enm.n,3) : randn(enm.n,3)
-        Flan2 = @. -(m/τ)*enm.vel + sigma*rand2
+        
+        Flan2 = @. -(m/τ)*enm.vel + sigma*rand
 
         @. enm.vel += 0.5*dt * (Ftp + Flan2) / m
     end
