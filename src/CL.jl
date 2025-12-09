@@ -68,7 +68,7 @@ function update_info!(tr::Trainer_CL)
 
     # update current free strains on output edges
     for (edge,_,_,current_strain) in tr.output
-        current_strain += cal_strain_f(tr, edge)
+        current_strain += cal_strain(tr.net_f, edge)
     end
 
 end
@@ -94,7 +94,6 @@ function step!(tr::Trainer_CL,T; eta=1.0, alpha=1.0, step_md=10)
 
     
     clamp_eta!(tr,step_md; eta=eta)
-
     tr.output = [(edge, target_strain, stiff, 0.0) for (edge, target_strain, stiff, _) in tr.output]
     fill!(tr.G, 0.0)
     for _ in 1:step_md
