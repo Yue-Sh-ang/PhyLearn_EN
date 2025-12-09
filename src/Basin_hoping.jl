@@ -7,21 +7,26 @@ struct Minimum
     pts::Matrix{Float64}   # n × 3
 end
 
-"""
-    canonicalize_pts(pts, ref_centered)
-
-Return pts in a canonical frame:
-- subtract COM
-- optimally rotate to align with ref_centered (which should already be COM-centered).
-"""
+function kabsch(P::Matrix{Float64}, Q::Matrix{Float64})
+    @assert size(P) == size(Q) "P and Q must have the same size"
+    H = P' * Q                           # 3×3 covariance
+    F = svd(H)
+    U, V = F.U, F.V
+    R = U * V'
+    if det(R) < 0.0
+        U[:, end] .= -U[:, end]         # enforce proper rotation (det = +1)
+        R = U * V'
+    end
+    return Matrix{Float64}(R)
+end
+'''using kabsch algorithm to canonicalize pts'''
 function canonicalize_pts(pts::Matrix{Float64}, ref_centered::Matrix{Float64})
     @assert size(pts) == size(ref_centered)
 
-    # subtract COM of current configuration
     com = vec(mean(pts, dims=1))          # 3-element vector
     pts_centered = pts .- com'            # n×3
 
-    # find best rotation that maps pts_centered to ref_centered
+    # optimal rotation to align with reference
     R = kabsch(pts_centered, ref_centered)  # 3×3
     pts_aligned = pts_centered * R          # n×3
 
