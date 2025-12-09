@@ -1,6 +1,6 @@
 
 using LinearAlgebra, Random
-
+using Statistics
 "Container for storing distinct minima."
 struct Minimum
     energy::Float64
