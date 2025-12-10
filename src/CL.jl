@@ -105,6 +105,6 @@ function step!(tr::Trainer_CL,T; eta=1.0, alpha=1.0, step_md=10)
     learn_k!(tr, alpha)
 
    
-    return tr.output[:,4]/step_md  # return current free strains on output edges 
+    return [v[4] / step_md for v in tr.output]  # return current free strains on output edges 
 end
 
