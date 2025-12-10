@@ -34,7 +34,7 @@ function canonicalize_pts(pts::Matrix{Float64}, ref_centered::Matrix{Float64})
     return pts_aligned
 end
 
-function hash_minimum_rigid(pts::Matrix{Float64}, ref_centered::Matrix{Float64}; digits::Int=6)
+function hash_minimum_rigid(pts::Matrix{Float64}, ref_centered::Matrix{Float64}; digits::Int=4)
     canon = canonicalize_pts(pts, ref_centered)
     rounded = round.(canon; digits=digits)
     return hash(rounded)
@@ -43,9 +43,9 @@ end
 
 function basin_hopping!(enm::ENM;
                         nsteps::Int=1000,
-                        T_bh::Float64=0.1,
-                        disp_sigma::Float64=0.1,
-                        force_tol::Float64=1e-6,
+                        T_bh::Float64=1e-6,
+                        disp_sigma::Float64=0.04,
+                        force_tol::Float64=1e-12,
                         max_quench_steps::Int=100_000,
                         dt_quench::Float64=0.005,
                         seed::Union{Nothing,Int}=nothing)
