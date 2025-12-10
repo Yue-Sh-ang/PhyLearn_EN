@@ -91,7 +91,7 @@ function step!(tr::Trainer_CL,T;sf_old= nothing, eta=1.0, alpha=1.0, step_md=10)
             end
         end
         #update current free strains
-        for (ido,(edge,_,_,current_strain)) in enumerate(tr.output)
+        for (ido,(edge,_,_)) in enumerate(tr.output)
             sf_new[ido] += cal_strain(tr.net_f, edge)
         end
     end
