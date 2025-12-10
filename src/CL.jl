@@ -96,12 +96,11 @@ function step!(tr::Trainer_CL,T;sf_old= nothing, eta=1.0, alpha=1.0, step_md=10)
         end
     end
 
-    G=G ./ step_md
+    Gradient=Gradient ./ step_md
     sf_new .= sf_new ./ step_md
     
     # stiffness update
-    learn_k!(tr, G, alpha)
-
+    learn_k!(tr, Gradient, alpha)
    
     return sf_new # return current free strains on output edges 
 end
