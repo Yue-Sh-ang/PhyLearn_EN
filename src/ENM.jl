@@ -8,7 +8,6 @@ struct ENM
     pts0::Matrix{Float64}     # n × 3
     pts::Matrix{Float64}     # n × 3
     vel::Matrix{Float64}     # n × 3
-    force::Matrix{Float64}   # n × 3
     edges::Vector{Tuple{Int,Int}}
     k::Vector{Float64}
     l0::Vector{Float64}
@@ -86,7 +85,7 @@ function ENM(filename; m=1.0, T0=0.0,seed=123)
     n, ne, pts, edges,kvec, lvec = load_graph(filename)
     pts0=deepcopy(pts)
     vel   = zeros(n, 3)
-    force = zeros(n, 3)
+    
 
     # initial velocities
     Random.seed!(seed)
@@ -94,7 +93,7 @@ function ENM(filename; m=1.0, T0=0.0,seed=123)
         vel[i, :] = randn(3) * sqrt(T0/m)
     end
 
-    return ENM(n, ne, pts0,pts, vel, force, edges, kvec, lvec,
+    return ENM(n, ne, pts0,pts, vel, edges, kvec, lvec,
                m)
 end
 
@@ -107,27 +106,43 @@ function cal_degree(enm::ENM)
     return deg
 end
 
-function cal_elastic_force!(enm::ENM)
-    fill!(enm.force, 0.0)
+
+function cal_elastic_force!(force::AbstractMatrix{<:Real}, enm::ENM)
+    
+    fill!(force, 0.0)
+
+    pts   = enm.pts
+    edges = enm.edges
+    k     = enm.k
+    l0    = enm.l0
 
     @inbounds for i in 1:enm.ne
-        (u,v) = enm.edges[i]
+        u, v = edges[i]
 
-        dx = enm.pts[v, :] .- enm.pts[u, :]
-        dist = norm(dx)
+        dx1 = pts[v,1] - pts[u,1]
+        dx2 = pts[v,2] - pts[u,2]
+        dx3 = pts[v,3] - pts[u,3]
 
-        if dist == 0
+        r2 = dx1*dx1 + dx2*dx2 + dx3*dx3
+        if r2 == 0.0
             continue
         end
+        r = sqrt(r2)
 
-        fmag = enm.k[i] * (dist - enm.l0[i])
-        fvec = fmag / dist .* dx
+        # Hookean spring: f = k (r - l0) * (dx / r)
+        scale = k[i] * (r - l0[i]) / r
 
-        enm.force[u, :] .+= fvec
-        enm.force[v, :] .-= fvec
+        fx = scale * dx1
+        fy = scale * dx2
+        fz = scale * dx3
+
+        force[u,1] += fx;  force[u,2] += fy;  force[u,3] += fz
+        force[v,1] -= fx;  force[v,2] -= fy;  force[v,3] -= fz
     end
 
+    return nothing
 end
+
 
 function cal_elastic_energy(enm::ENM)
     E = 0.0
@@ -174,44 +189,53 @@ end
 function reset_config!(enm::ENM)
     enm.pts .= enm.pts0
     fill!(enm.vel, 0.0)
-    fill!(enm.force, 0.0)
+    
+    return nothing
+end
+#GJF method
+function run_md!(
+    enm::ENM, T;
+    steps::Int=1,
+    dt::Float64=0.005,
+    tau::Float64=1.0,
+    rng::AbstractRNG = Random.default_rng())
+    
+    m = enm.m
+    α = m / tau
+    c = α * dt / (2m)          # = dt/(2τ)
+    a = (1 - c) / (1 + c)
+    b = 1 / (1 + c)
+
+    βscale = sqrt(2 * α * T * dt)   # kB=1
+
+    β    = similar(enm.vel)
+    f_old = similar(enm.vel)
+    f_new = similar(enm.vel)
+
+    # f_old = f(r^0)
+    cal_elastic_force!(f_old, enm)
+    
+
+    @inbounds for _ in 1:steps
+        # draw β^{n+1}
+        randn!(rng, β)
+        @. β *= βscale
+
+        # r^{n+1}
+        @. enm.pts += b * (dt * enm.vel + (dt^2/(2m)) * f_old + (dt/(2m)) * β)
+
+        # f_new = f(r^{n+1})
+        cal_elastic_force!(f_new, enm)
+
+        # v^{n+1}
+        @. enm.vel = a * enm.vel + (dt/(2m)) * (a * f_old + f_new) + (b/m) * β
+
+        # next step: f_old ← f_new (swap buffers, no copy)
+        f_old, f_new = f_new, f_old
+    end
     return nothing
 end
 
-function run_md!(enm::ENM,T; steps=1, dt=0.005, seed=nothing, tau=1.0)
-    if seed !== nothing # I think there is a better way to control the thermal noise
-        Random.seed!(seed)
-    end
-    
-    m   = enm.m
-    τ   = tau
-    
-    sigma = (T > 0 && τ > 0) ? sqrt(2*m*T/(τ*dt)) : 0.0
-
-    for _ in 1:steps
-        
-        # ---- 1st half-step ----
-        cal_elastic_force!(enm)
-        Ft = copy(enm.force)
-
-        rand = sigma == 0 ? zeros(enm.n,3) : randn(enm.n,3)
-        Flan1 = @. -(m/τ)*enm.vel + sigma*rand
-
-        @. enm.vel += 0.5*dt * (Ft + Flan1) / m
-
-        # ---- position update ----
-        @. enm.pts += dt * enm.vel
-
-        # ---- 2nd half-step ----
-        cal_elastic_force!(enm)
-        Ftp = copy(enm.force)
-
-        
-        Flan2 = @. -(m/τ)*enm.vel + sigma*rand
-
-        @. enm.vel += 0.5*dt * (Ftp + Flan2) / m
-    end
-end
 
 function quench_fire!(enm::ENM; dt::Float64=0.005, max_steps::Int=100_000, force_tol::Float64=1e-6)
 
@@ -223,12 +247,12 @@ function quench_fire!(enm::ENM; dt::Float64=0.005, max_steps::Int=100_000, force
 
     # unpack
     pts  = enm.pts; vel  = enm.vel
-    F    = enm.force; m    = enm.m
+    F    = similar(enm.vel); m    = enm.m
     n    = enm.n
 
     for step in 1:max_steps
 
-        cal_elastic_force!(enm)
+        cal_elastic_force!(F, enm)
 
         maxF = maximum(abs.(F))
         if maxF < force_tol
