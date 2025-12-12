@@ -10,7 +10,7 @@ const NORMAL = 0
 mutable struct Trainer_CL
     input::Vector{Tuple{Int,Float64,Float64,Float64}}   # (edge, input strain, stiffness, l0)
     output::Vector{Tuple{Int,Float64,Float64,Float64}} # (edge, target strain, stiffness,l0)
-    edgetype::Vector{Int}    # 0: free, 1: input, 2: output
+    trainable_edges::Vector{Int}    # 0: free, 1: input, 2: output
     net_f::ENM
     net_c::ENM
 end
@@ -38,7 +38,9 @@ function Trainer_CL(net::ENM,
         net_c.k[edge] = 0.0
     end
 
-    return Trainer_CL(input_construct, output_construct, edgetype, net_f, net_c)
+    trainable_edges = findall(==(0), tr.edge_type)
+
+    return Trainer_CL(input_construct, output_construct, trainable_edges, net_f, net_c)
 end
 
 
@@ -52,16 +54,58 @@ function clamp_eta!(tr::Trainer_CL,strain_f::Vector{Float64},eta)
 end
 
 
-function learn_k!(tr::Trainer_CL, Gradient::Vector{Float64},alpha,vmin=1e-3, vmax=2e2)
+function update_k!(tr::Trainer_CL, grad::Vector{Float64}, alpha, vmin=1e-3, vmax=200.0)
+    kf = tr.net_f.k
+    kc = tr.net_c.k
+    idxs = tr.trainable_edges   # indices where edge_type == 0
+
+    @inbounds @simd for j in eachindex(idxs)
+        i = idxs[j]
+
+        newk = kf[i] - alpha * grad[i]
+        newk = clamp(newk, vmin, vmax)
+
+        kf[i] = newk
+        kc[i] = newk   
+    end
+
+    return nothing
+end
+
+
+function update_Gradient!(tr::Trainer_CL, grad::Vector{Float64})
+    pts_f  = tr.net_f.pts    # size (N, 3)
+    pts_c  = tr.net_c.pts    # size (N, 3)
+    l0f    = tr.net_f.l0
+    l0c    = tr.net_c.l0
+    edges  = tr.net_f.edges  
+        
+
+    @inbounds @simd for ide in eachindex(l0f)
+        
+        u = edges[ide, 1]
+        v = edges[ide, 2]
     
-    tr.net_f.k .-= alpha * Gradient
-    tr.net_c.k .-= alpha * Gradient
+
     
-    tr.net_c.k .= clamp.(tr.net_f.k, vmin, vmax) # might comflict with stiffness at input or output careful!
-    tr.net_f.k .= clamp.(tr.net_f.k, vmin, vmax)
+        dx_f = pts_f[v, 1] - pts_f[u, 1]
+        dy_f = pts_f[v, 2] - pts_f[u, 2]
+        dz_f = pts_f[v, 3] - pts_f[u, 3]
+        lf   = sqrt(dx_f*dx_f + dy_f*dy_f + dz_f*dz_f)
+
     
-    
-end 
+        dx_c = pts_c[v, 1] - pts_c[u, 1]
+        dy_c = pts_c[v, 2] - pts_c[u, 2]
+        dz_c = pts_c[v, 3] - pts_c[u, 3]
+        lc   = sqrt(dx_c*dx_c + dy_c*dy_c + dz_c*dz_c)
+
+        δc = lc - l0c[ide]
+        δf = lf - l0f[ide]
+        grad[ide] += δc*δc - δf*δf
+    end
+end
+
+
 
 function step!(tr::Trainer_CL,T;sf_old= nothing, eta=1.0, alpha=1.0, step_md=10)
     #learning information reset
@@ -81,16 +125,7 @@ function step!(tr::Trainer_CL,T;sf_old= nothing, eta=1.0, alpha=1.0, step_md=10)
         run_md!(tr.net_f,T)
         run_md!(tr.net_c,T)
         # update gradient
-        @inbounds for (ide, (u,v)) in enumerate(tr.net_f.edges)
-            if tr.edgetype[ide] == NORMAL
-                lf = norm(tr.net_f.pts[v,:] .- tr.net_f.pts[u,:])
-                l0f = tr.net_f.l0[ide]
-
-                lc = norm(tr.net_c.pts[v,:] .- tr.net_c.pts[u,:])
-                l0c = tr.net_c.l0[ide]
-                Gradient[ide] +=  (lc - l0c)^2 - (lf - l0f)^2    
-            end
-        end
+        update_Gradient!(tr, Gradient)
         #update current free strains
         for (ido,(edge,_,_,l0)) in enumerate(tr.output)
             sf_new[ido] += cal_strain(tr.net_f, edge, l0)

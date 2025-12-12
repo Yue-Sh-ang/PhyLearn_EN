@@ -2,19 +2,19 @@
 using LinearAlgebra, Random
 using Plots
 function load_graph(filename)
-####---------------------
-# load graph from a text file
-# format:
-# n
-# x1 y1 z1
-# x2 y2 z2
-# ...
-# xn yn zn
-# ne
-# node1_1 node1_2 stiffness1 l0_1
-# node2_1 node2_2 stiffness2 l0_2
-# ...   
-####---------------------
+ ####---------------------
+ # load graph from a text file
+ # format:
+ # n
+ # x1 y1 z1
+ # x2 y2 z2
+ # ...
+ # xn yn zn
+ # ne
+ # node1_1 node1_2 stiffness1 l0_1
+ # node2_1 node2_2 stiffness2 l0_2
+ # ...   
+ ####---------------------
     lines = readlines(filename)
     idx = 1
     ### --- Read points ---
@@ -49,6 +49,19 @@ function load_graph(filename)
     return n, ne, pts, edges, stiffness, l0
 end
 
+function save_graph(filename, enm::ENM)
+    open(filename, "w") do io
+        println(io, enm.n)
+        for i in 1:enm.n
+            println(io, join(enm.pts[i, :], " "))
+        end
+        println(io, enm.ne)
+        for e in 1:enm.ne
+            u, v = enm.edges[e]
+            println(io, "$(u-1) $(v-1) $(enm.k[e]) $(enm.l0[e])")
+        end
+    end
+end
 
 struct ENM
     n::Int
