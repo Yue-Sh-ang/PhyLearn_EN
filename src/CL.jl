@@ -38,7 +38,7 @@ function Trainer_CL(net::ENM,
         net_c.k[edge] = 0.0
     end
 
-    trainable_edges = findall(==(0), tr.edge_type)
+    trainable_edges = findall(==(0), edgetype)
 
     return Trainer_CL(input_construct, output_construct, trainable_edges, net_f, net_c)
 end
