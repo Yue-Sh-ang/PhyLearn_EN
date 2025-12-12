@@ -3,5 +3,8 @@
 
 # Ignore notebooks
 *.ipynb
-
-
+*.bin
+*.sh
+*.out
+*.error
+*test.jl
