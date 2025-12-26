@@ -5,6 +5,7 @@
 *.ipynb
 *.bin
 *.sh
+*.txt
 *.out
 *.error
 *test.jl
