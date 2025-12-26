@@ -9,8 +9,8 @@ const NORMAL = 0
 #information container for training
 mutable struct Trainer_CL
     input::Vector{Tuple{Int,Float64,Float64}}   # (edge, input strain, l0)
-    output::Vector{Tuple{Int,Float64,Float64}} # (edge, target strain, l0)
-    edgetype::Vector{Int}    
+    output::Vector{Tuple{Int,Float64,Float64}} # (edge, target strain, l0)  
+    trainable_edges::Vector{Int}  # indices of trainable edges
     net_f::ENM
     net_c::ENM
 end
@@ -57,7 +57,8 @@ function Trainer_CL(net::ENM,#the network from allo
     end
 
     net_c = deepcopy(net_f)
-    return Trainer_CL(input_construct, output_construct, edgetype, net_f, net_c)
+    trainable_edges = findall(==(NORMAL), edgetype)
+    return Trainer_CL(input_construct, output_construct, trainable_edges, net_f, net_c)
 end
 
 
@@ -73,8 +74,8 @@ end
 function update_k!(tr::Trainer_CL, grad::Vector{Float64}, alpha, vmin=1e-3, vmax=200.0)
     kf = tr.net_f.k
     kc = tr.net_c.k
-    idxs = tr.edgetype .== NORMAL   # indices where edge_type == 0
-
+       # indices where edge_type == 0
+    idxs = tr.trainable_edges
     @inbounds @simd for j in eachindex(idxs)
         i = idxs[j]
 
