@@ -21,8 +21,8 @@ function Trainer_CL(net::ENM,#the network from allo
                    )
     # this function prepares the basic setting for training
     # denote input and output edges and denote their 
-
-    edgetype = zeros(Int, net.ne)
+    ne = length(net.edges)
+    edgetype = zeros(Int, ne)
     input_construct = Vector{Tuple{Int,Float64,Float64}}()
     output_construct=Vector{Tuple{Int,Float64,Float64}}()
 
