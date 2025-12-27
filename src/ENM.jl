@@ -483,12 +483,12 @@ end
 
 #--------- plotting functions ---------
 
-
 function plot_net(enm::ENM;
-    input:: Vector{Int}= nothing,#edge
-    output:: Vector{Int}= nothing,#edge
-    camera = (30, 30),
-    color:: Vector{Float64}=nothing)
+    input::Union{Nothing,AbstractVector{<:Integer}} = nothing,
+    output::Union{Nothing,AbstractVector{<:Integer}} = nothing,
+    camera::Tuple{<:Real,<:Real} = (30, 30),
+    color::Union{Nothing,Symbol,String,AbstractVector{<:Real}} = nothing
+)
     if color !== nothing
         if length(color) != length(enm.edges)
             error("Length of color vector must match number of edges.")
@@ -508,10 +508,9 @@ using CairoMakie
 
 function plot_net_2d(
     enm::ENM;
-    input::Union{Nothing,Vector{Int}} = nothing,
-    output::Union{Nothing,Vector{Int}} = nothing,
-    color = nothing
- )
+    input::Union{Nothing,AbstractVector{<:Integer}} = nothing,
+    output::Union{Nothing,AbstractVector{<:Integer}} = nothing,
+    color::Union{Nothing,Symbol,String,AbstractVector{<:Real}} = nothing)
     pts   = enm.pts
     edges = enm.edges
     ne    = length(edges)
@@ -565,7 +564,7 @@ function plot_net_2d(
     end
 
     # --- Figure / Axis ---
-    fig = Figure(resolution = (500, 500))
+    fig = Figure(size = (500, 500))
     ax  = Axis(fig[1, 1]; aspect = DataAspect(), xlabel = "x", ylabel = "y")
 
     # --- Normal edges (colormapped or black) ---
@@ -619,7 +618,7 @@ function plot_net_2d(
     end
 
     # --- Nodes ---
-    scatter!(ax, pts[:, 1], pts[:, 2]; color = :grey, markersize = 6)
+    Makie.scatter!(ax, pts[:, 1], pts[:, 2]; color = :grey, markersize = 6)
 
     return fig
 end
@@ -627,10 +626,11 @@ end
  
 function plot_net_3d(
     enm::ENM;
-    input::Union{Nothing,Vector{Int}} = nothing,
-    output::Union{Nothing,Vector{Int}} = nothing,
-    color = nothing
- )
+    input::Union{Nothing,AbstractVector{<:Integer}} = nothing,
+    output::Union{Nothing,AbstractVector{<:Integer}} = nothing,
+    camera::Tuple{<:Real,<:Real} = (30, 30),
+    color::Union{Nothing,Symbol,String,AbstractVector{<:Real}} = nothing
+	)
     pts   = enm.pts
     edges = enm.edges
     ne    = length(edges)

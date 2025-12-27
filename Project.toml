@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["yueshang "]
 
 [deps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Pluto = "c3e4b0f8-55cb-11ea-2926-15256bba5781"
@@ -11,6 +12,7 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
+CairoMakie = "0.15.8"
 LinearAlgebra = "1.12.0"
 Plots = "1.41.2"
 Pluto = "0.20.21"

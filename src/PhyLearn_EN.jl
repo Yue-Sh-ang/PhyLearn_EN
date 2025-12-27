@@ -11,8 +11,8 @@ export  ENM,save_enm,
         cal_elastic_jacobian,cal_modes,
         plot_net,
         #CL
-        Trainer_CL,set_edge_k!,set_edge_l0!,update_k!,update_grad!
-        basin_hopping!
+        Trainer_CL,set_edge_k!,set_edge_l0!,update_k!,update_grad!,load_trainer_CL
+	basin_hopping!
 
 
 
