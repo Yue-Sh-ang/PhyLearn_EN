@@ -485,168 +485,250 @@ end
 
 
 function plot_net(enm::ENM;
-    source::Union{Nothing, Int, AbstractVector{<:Int}} = nothing,
-    target::Union{Nothing, Int, AbstractVector{<:Int}} = nothing,
+    input:: Vector{Int}= nothing,#edge
+    output:: Vector{Int}= nothing,#edge
     camera = (30, 30),
-    color=nothing)
+    color:: Vector{Float64}=nothing)
+    if color !== nothing
+        if length(color) != length(enm.edges)
+            error("Length of color vector must match number of edges.")
+        end
+    end
     if enm.dim == 2
-        return plot_net_2d(enm; source=source, target=target, color=color)
+        return plot_net_2d(enm; input=input, output=output, color=color)
     elseif enm.dim == 3
-        return plot_net_3d(enm; source=source, target=target, camera=camera, color=color)
+        return plot_net_3d(enm; input=input, output=output, camera=camera, color=color)
     else
         error("Unsupported dimension: $(enm.dim). Only 2D and 3D are supported.")
     end
 end
 
+
+using CairoMakie 
+
 function plot_net_2d(
     enm::ENM;
-    source::Union{Nothing, Int, AbstractVector{<:Int}} = nothing,
-    target::Union{Nothing, Int, AbstractVector{<:Int}} = nothing,
+    input::Union{Nothing,Vector{Int}} = nothing,
+    output::Union{Nothing,Vector{Int}} = nothing,
     color = nothing
  )
+    pts   = enm.pts
+    edges = enm.edges
+    ne    = length(edges)
 
-    x = enm.pts[:, 1]
-    y = enm.pts[:, 2]
+    @assert size(pts, 2) == 2 "enm.pts must be N×2"
+    N = size(pts, 1)
 
-    plt = plot(legend=false)
+    input_set  = input  === nothing ? Set{Int}() : Set(input)
+    output_set = output === nothing ? Set{Int}() : Set(output)
 
-    # ---- nodes ----
-    scatter!(plt, x, y;
-        markersize=5,
-        markercolor=:grey,
-        label=""
-    )
-
-    # ---- edge colors ----
-    edge_colors = nothing
-    if color == :k || color == "k"
-        kvals = enm.k
-        kmin, kmax = extrema(kvals)
-        rng = kmax > kmin ? (kmax - kmin) : 1.0
-        cmap = cgrad(:viridis)
-        edge_colors = [cmap((kv - kmin) / rng) for kv in kvals]
-    end
-
-    # ---- draw edges ----
-    ne=length(enm.edges)
+    # normal edges are those NOT in input or output
+    normal_idxs = Vector{Int}()
+    sizehint!(normal_idxs, ne)
     for i in 1:ne
-        u, v = enm.edges[i]
-        lc = edge_colors === nothing ? :grey : edge_colors[i]
-        plot!(plt, [x[u], x[v]], [y[u], y[v]];
-            linecolor=lc,
-            label=""
-        )
-    end
-
-    # ---- helper to normalize indices ----
-    _asvec(idx) = idx isa AbstractVector ? idx : [idx]
-
-    # ---- source edges ----
-    if source !== nothing
-        for i in _asvec(source)
-            u, v = enm.edges[i]
-            scatter!(plt,
-                [x[u], x[v]],
-                [y[u], y[v]];
-                markersize=6,
-                markercolor=:darkblue,
-                label="input"
-            )
+        if !(i in input_set) && !(i in output_set)
+            push!(normal_idxs, i)
         end
     end
 
-    # ---- target edges ----
-    if target !== nothing
-        for i in _asvec(target)
-            u, v = enm.edges[i]
-            scatter!(plt,
-                [x[u], x[v]],
-                [y[u], y[v]];
-                markersize=6,
-                markercolor=:darkred,
-                label="output"
-            )
+    # --- Build line collections as vectors of Point2f: pairs are segments ---
+    # normal segments
+    normal_seg = Point2f[]
+    sizehint!(normal_seg, 2 * length(normal_idxs))
+    for idx in normal_idxs
+        u, v = edges[idx]
+        @assert 1 ≤ u ≤ N && 1 ≤ v ≤ N "Edge has node index out of bounds: ($u,$v)"
+        push!(normal_seg, Point2f(pts[u, 1], pts[u, 2]))
+        push!(normal_seg, Point2f(pts[v, 1], pts[v, 2]))
+    end
+
+    # input segments
+    input_seg = Point2f[]
+    if !isempty(input_set)
+        sizehint!(input_seg, 2 * length(input_set))
+        for idx in input_set
+            u, v = edges[idx]
+            push!(input_seg, Point2f(pts[u, 1], pts[u, 2]))
+            push!(input_seg, Point2f(pts[v, 1], pts[v, 2]))
         end
     end
 
-    return plt
+    # output segments
+    output_seg = Point2f[]
+    if !isempty(output_set)
+        sizehint!(output_seg, 2 * length(output_set))
+        for idx in output_set
+            u, v = edges[idx]
+            push!(output_seg, Point2f(pts[u, 1], pts[u, 2]))
+            push!(output_seg, Point2f(pts[v, 1], pts[v, 2]))
+        end
+    end
+
+    # --- Figure / Axis ---
+    fig = Figure(resolution = (500, 500))
+    ax  = Axis(fig[1, 1]; aspect = DataAspect(), xlabel = "x", ylabel = "y")
+
+    # --- Normal edges (colormapped or black) ---
+    normal_plot = nothing
+
+    if color === nothing
+        if !isempty(normal_seg)
+            linesegments!(ax, normal_seg; color = :grey, linewidth = 1.5)
+        end
+    else
+        # values used for coloring only normal edges
+        vals = if (color == :k || color == "k")
+            @assert hasproperty(enm, :k) "color=:k requires enm.k"
+            enm.k[normal_idxs]
+        elseif color isa AbstractVector{<:Real}
+            @assert length(color) == ne "If `color` is a vector, it must have length == number of edges"
+            color[normal_idxs]
+        else
+            error("Unsupported `color`. Use nothing, :k (or \"k\"), or a length-ne vector of reals.")
+        end
+
+        if isempty(vals) || isempty(normal_seg)
+            # nothing normal to color; skip colorbar
+        else
+            cmin = minimum(vals)
+            cmax = maximum(vals)
+            rng  = (cmax > cmin) ? (cmax - cmin) : 1.0
+            colorrange = (cmin, cmax)
+
+            # `linesegments` accepts one scalar per segment (i.e., per edge)
+            # Here: number of segments == length(normal_idxs)
+            normal_plot = linesegments!(
+                ax, normal_seg;
+                color      = vals,
+                colormap   = :viridis,
+                colorrange = colorrange,
+                linewidth  = 1.8
+            )
+
+            # colorbar reflects ONLY normal edges
+            Colorbar(fig[1, 2], normal_plot; label = "edge color (normal edges)")
+        end
+    end
+
+    # --- Special edges (dashed, fixed colors; excluded from colorbar by construction) ---
+    if !isempty(input_seg)
+        linesegments!(ax, input_seg; color = :darkblue, linestyle = :dash, linewidth = 2.4)
+    end
+    if !isempty(output_seg)
+        linesegments!(ax, output_seg; color = :darkred, linestyle = :dash, linewidth = 2.4)
+    end
+
+    # --- Nodes ---
+    scatter!(ax, pts[:, 1], pts[:, 2]; color = :grey, markersize = 6)
+
+    return fig
 end
 
+ 
 function plot_net_3d(
     enm::ENM;
-    source::Union{Nothing, Int, AbstractVector{<:Int}} = nothing,
-    target::Union{Nothing, Int, AbstractVector{<:Int}} = nothing,
-    camera = (30, 30),
+    input::Union{Nothing,Vector{Int}} = nothing,
+    output::Union{Nothing,Vector{Int}} = nothing,
     color = nothing
  )
+    pts   = enm.pts
+    edges = enm.edges
+    ne    = length(edges)
 
-    x = enm.pts[:, 1]
-    y = enm.pts[:, 2]
-    z = enm.pts[:, 3]
+    @assert size(pts, 2) == 3 "enm.pts must be N×3"
+    N = size(pts, 1)
 
-    plt = plot3d(legend=false, camera=camera)
+    input_set  = input  === nothing ? Set{Int}() : Set(input)
+    output_set = output === nothing ? Set{Int}() : Set(output)
 
-    # ---- nodes ----
-    scatter3d!(plt, x, y, z;
-        markersize=5,
-        markercolor=:grey,
-        label=""
-    )
-
-    # ---- edge colors ----
-    edge_colors = nothing
-    if color == :k || color == "k"
-        kvals = enm.k
-        kmin, kmax = extrema(kvals)
-        rng = kmax > kmin ? (kmax - kmin) : 1.0
-        cmap = cgrad(:viridis)
-        edge_colors = [cmap((kv - kmin) / rng) for kv in kvals]
-    end
-
-    # ---- draw edges ----
-    ne=length(enm.edges)
+    # normal edges: not special
+    normal_idxs = Vector{Int}()
+    sizehint!(normal_idxs, ne)
     for i in 1:ne
-        u, v = enm.edges[i]
-        lc = edge_colors === nothing ? :grey : edge_colors[i]
-        plot3d!(plt, [x[u], x[v]], [y[u], y[v]], [z[u], z[v]];
-            linecolor=lc,
-            label=""
-        )
-    end
-
-    # ---- helper to normalize indices ----
-    _asvec(idx) = idx isa AbstractVector ? idx : [idx]
-
-    # ---- source edges ----
-    if source !== nothing
-        for i in _asvec(source)
-            u, v = enm.edges[i]
-            scatter3d!(plt,
-                [x[u], x[v]],
-                [y[u], y[v]],
-                [z[u], z[v]];
-                markersize=6,
-                markercolor=:darkblue,
-                label="input"
-            )
+        if !(i in input_set) && !(i in output_set)
+            push!(normal_idxs, i)
         end
     end
 
-    # ---- target edges ----
-    if target !== nothing
-        for i in _asvec(target)
-            u, v = enm.edges[i]
-            scatter3d!(plt,
-                [x[u], x[v]],
-                [y[u], y[v]],
-                [z[u], z[v]];
-                markersize=6,
-                markercolor=:darkred,
-                label="output"
-            )
+    # --- Build line collections (pairs of Point3f are segments) ---
+    normal_seg = Point3f[]
+    sizehint!(normal_seg, 2 * length(normal_idxs))
+    for idx in normal_idxs
+        u, v = edges[idx]
+        @assert 1 ≤ u ≤ N && 1 ≤ v ≤ N "Edge has node index out of bounds: ($u,$v)"
+        push!(normal_seg, Point3f(pts[u, 1], pts[u, 2], pts[u, 3]))
+        push!(normal_seg, Point3f(pts[v, 1], pts[v, 2], pts[v, 3]))
+    end
+
+    input_seg = Point3f[]
+    if !isempty(input_set)
+        sizehint!(input_seg, 2 * length(input_set))
+        for idx in input_set
+            u, v = edges[idx]
+            push!(input_seg, Point3f(pts[u, 1], pts[u, 2], pts[u, 3]))
+            push!(input_seg, Point3f(pts[v, 1], pts[v, 2], pts[v, 3]))
         end
     end
 
-    return plt
+    output_seg = Point3f[]
+    if !isempty(output_set)
+        sizehint!(output_seg, 2 * length(output_set))
+        for idx in output_set
+            u, v = edges[idx]
+            push!(output_seg, Point3f(pts[u, 1], pts[u, 2], pts[u, 3]))
+            push!(output_seg, Point3f(pts[v, 1], pts[v, 2], pts[v, 3]))
+        end
+    end
+
+    # --- Figure / LScene (3D) ---
+    fig = Figure(resolution = (950, 750))
+    ax3 = LScene(fig[1, 1], scenekw = (show_axis = true,))
+
+    # --- Normal edges ---
+    normal_plot = nothing
+    if color === nothing
+        if !isempty(normal_seg)
+            linesegments!(ax3, normal_seg; color = :black, linewidth = 1.4)
+        end
+    else
+        vals = if (color == :k || color == "k")
+            @assert hasproperty(enm, :k) "color=:k requires enm.k"
+            enm.k[normal_idxs]
+        elseif color isa AbstractVector{<:Real}
+            @assert length(color) == ne "If `color` is a vector, it must have length == number of edges"
+            color[normal_idxs]
+        else
+            error("Unsupported `color`. Use nothing, :k (or \"k\"), or a length-ne vector of reals.")
+        end
+
+        if !isempty(vals) && !isempty(normal_seg)
+            cmin = minimum(vals)
+            cmax = maximum(vals)
+            colorrange = (cmin, cmax)
+
+            normal_plot = linesegments!(
+                ax3, normal_seg;
+                color      = vals,          # one value per edge segment
+                colormap   = :viridis,
+                colorrange = colorrange,
+                linewidth  = 1.6
+            )
+
+            Colorbar(fig[1, 2], normal_plot; label = "edge color (normal edges)")
+        end
+    end
+
+    # --- Special edges (dashed, fixed colors; excluded from colorbar) ---
+    if !isempty(input_seg)
+        linesegments!(ax3, input_seg; color = :darkblue, linestyle = :dash, linewidth = 2.2)
+    end
+    if !isempty(output_seg)
+        linesegments!(ax3, output_seg; color = :darkred, linestyle = :dash, linewidth = 2.2)
+    end
+
+    # --- Nodes ---
+    scatter!(ax3, pts[:, 1], pts[:, 2], pts[:, 3]; color = :black, markersize = 8)
+
+    return fig
 end
 

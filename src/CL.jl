@@ -140,7 +140,19 @@ function update_grad!(tr::Trainer_CL, grad::Vector{Float64})
     return nothing
 end
 
+function load_trainer_CL(tr::Trainer_CL, filepath::String)
+    net=deepcopy(tr.net_f)
+    for ip in tr.input
+        set_edge_k!(net, ip[1], 0.0)
+        set_edge_l0!(net, ip[1], ip[3])
+    end
+    for op in tr.output
+        set_edge_k!(net, op[1], 0.0)
+        set_edge_l0!(net, op[1], op[3])
+    end
 
+    return net
+end
 
 # # one exampe of training: eta always 1
 # function step!(tr::Trainer_CL,T;sf_old= nothing, eta=1.0, alpha=1.0, step_md=10)
