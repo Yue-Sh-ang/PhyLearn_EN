@@ -11,6 +11,8 @@ export  ENM,save_enm,
         cal_strain,put_strain!,
         cal_elastic_jacobian,cal_modes,
         plot_net,
+        save_k,load_k,
+        save_pts,load_pts,
         #CL
         Trainer_CL,set_edge_k!,set_edge_l0!,update_k!,update_grad!,load_trainer_CL,
         #allosteric
