@@ -16,7 +16,7 @@ export  ENM,save_enm,
         #allosteric
         build_graph,choose_new_edge,cal_edge_distance,
         #Allosteric.jl
-        generate_task,load_task,
+        generate_task,load_task
         #MSM:not now
 
 
