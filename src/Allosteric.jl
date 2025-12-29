@@ -59,10 +59,9 @@ function choose_new_edge(enm::ENM,strain::Float64; inout::Union{Vector{Tuple{Int
         error("No available edges to choose from!")
     end
 
-    if inout===nothing or !Distant
+    if inout===nothing || !Distant
         selected_edge = edge_candidates[rand(1:length(edge_candidates))]
-
-     else
+    else
         g=build_graph(enm)
         max_dist=-1.0
         selected_edge=-1
@@ -79,16 +78,15 @@ function choose_new_edge(enm::ENM,strain::Float64; inout::Union{Vector{Tuple{Int
                 selected_edge=edge
             end
         end
-        
     end
 
     return (selected_edge,strain, enm.l0[selected_edge])
 end
 
-function generate_task(enm::ENM,dir::string;s_in::Vector{Float64}()=[0.2],s_out::Vector{Float64}()=[0.2],Distant=true)
-    exist=nothing
+function generate_task(enm::ENM,dir::String;s_in::Vector{Float64}=[0.2],s_out::Vector{Float64}=[0.2],Distant=true)
     input=Vector{Tuple{Int,Float64,Float64}}()
     output=Vector{Tuple{Int,Float64,Float64}}()
+    exist=nothing
     for s in s_in
         push!(input, choose_new_edge(enm,s; inout=exist,Distant=Distant))
         if exist===nothing
