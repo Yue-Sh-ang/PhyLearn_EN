@@ -11,7 +11,7 @@ timewindow=200
 trainsteps=10_001
 
 save_per=1_000
-print_per=200
+print_per=250
 
 
 println("Dimension: $(dim), Network ID: $(network_id), taskid: $(taskid), Training Temperature: $(trainT)")
