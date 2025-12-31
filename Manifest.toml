@@ -1185,7 +1185,7 @@ uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.8.3"
 
 [[deps.PhyLearn_EN]]
-deps = ["CairoMakie", "Graphs", "LinearAlgebra", "Plots", "Pluto", "Random", "SimpleWeightedGraphs", "Statistics"]
+deps = ["CairoMakie", "Graphs", "LinearAlgebra", "Plots", "Pluto", "Random", "SimpleWeightedGraphs", "StableRNGs", "Statistics"]
 path = "."
 uuid = "810f855e-60da-4232-bec9-eecd65aaa80f"
 version = "0.1.0"
