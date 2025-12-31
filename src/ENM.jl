@@ -461,7 +461,7 @@ end
 
 
 #--------- mode analysis --------- 
-
+# A reasonable to calculate the modes is to set the target and the source to 0
 function cal_elastic_jacobian(enm::ENM,current::Bool=false)
     dim = enm.dim
     @assert dim == 2 || dim == 3
@@ -517,20 +517,33 @@ end
 #--------- plotting functions ---------
 
 function plot_net(enm::ENM;
-    input::Union{Nothing,AbstractVector{<:Integer}} = nothing,
-    output::Union{Nothing,AbstractVector{<:Integer}} = nothing,
+    input::Union{Nothing,Vector{Tuple{Int,Float64,Float64}}} = nothing,
+    output::Union{Nothing,Vector{Tuple{Int,Float64,Float64}}} = nothing,
     camera::Tuple{<:Real,<:Real} = (30, 30),
     color::Union{Nothing,Symbol,String,AbstractVector{<:Real}} = nothing
  )
+    input_edges =Vector{Int}()
+    if input !== nothing
+        for ip in input
+            push!(input_edges, ip[1])
+        end
+    end
+    output_edges =Vector{Int}()
+    if output !== nothing
+        for op in output
+            push!(output_edges, op[1])
+        end
+    end
+
     if color !== nothing
         if length(color) != length(enm.edges)
             error("Length of color vector must match number of edges.")
         end
     end
     if enm.dim == 2
-        return plot_net_2d(enm; input=input, output=output, color=color)
+        return plot_net_2d(enm; input=input_edges, output=output_edges, color=color)
     elseif enm.dim == 3
-        return plot_net_3d(enm; input=input, output=output, camera=camera, color=color)
+        return plot_net_3d(enm; input=input_edges, output=output_edges, camera=camera, color=color)
     else
         error("Unsupported dimension: $(enm.dim). Only 2D and 3D are supported.")
     end

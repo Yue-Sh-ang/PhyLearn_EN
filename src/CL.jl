@@ -122,20 +122,19 @@ end
 
 function load_trainer_CL(tr::Trainer_CL)
     net=deepcopy(tr.net_f)
-    input=Vector{Int}()
-    output=Vector{Int}()
+    
     for ip in tr.input
         set_edge_k!(net, ip[1], 0.0)
         set_edge_l0!(net, ip[1], ip[3])
-        push!(input, ip[1])
+        
     end
     for op in tr.output
         set_edge_k!(net, op[1], 0.0)
         set_edge_l0!(net, op[1], op[3])
-        push!(output, op[1])
+        
     end
 
-    return net,input,output
+    return net
 end
 
 

@@ -31,8 +31,9 @@ function cal_edge_distance(g::SWG.SimpleWeightedGraph, enm::ENM, edge1::Int, edg
     return mean(dists)
 end
 
-function choose_new_edge(enm::ENM,strain::Float64; inout::Union{Vector{Tuple{Int,Float64,Float64}}, Nothing}=nothing,Distant=true)
+function choose_new_edge(enm::ENM,strain::Float64; inout::Union{Vector{Tuple{Int,Float64,Float64}}, Nothing}=nothing,Distant=true,seed::Int=1234)
     excluded_nodes=Set{Int}()
+    Random.seed!(seed)
     #exclude nodes involved in input/output edges
     if inout!==nothing
         for ip in inout
@@ -83,12 +84,12 @@ function choose_new_edge(enm::ENM,strain::Float64; inout::Union{Vector{Tuple{Int
     return (selected_edge,strain, enm.l0[selected_edge])
 end
 
-function generate_task(enm::ENM,dir::String;s_in::Vector{Float64}=[0.2],s_out::Vector{Float64}=[0.2],Distant=true)
+function generate_task(enm::ENM,dir::String;s_in::Vector{Float64}=[0.2],s_out::Vector{Float64}=[0.2],Distant=true,seed::Int=1234)
     input=Vector{Tuple{Int,Float64,Float64}}()
     output=Vector{Tuple{Int,Float64,Float64}}()
     exist=nothing
     for s in s_in
-        push!(input, choose_new_edge(enm,s; inout=exist,Distant=Distant))
+        push!(input, choose_new_edge(enm,s; inout=exist,Distant=Distant,seed=seed))
         if exist===nothing
             exist=[input[end]]
         else
@@ -96,7 +97,7 @@ function generate_task(enm::ENM,dir::String;s_in::Vector{Float64}=[0.2],s_out::V
         end
     end
     for s in s_out
-        push!(output, choose_new_edge(enm,s; inout=exist,Distant=Distant))
+        push!(output, choose_new_edge(enm,s; inout=exist,Distant=Distant,seed=seed))
         push!(exist, output[end])
     end
     open(joinpath(dir, "input.txt"), "w") do io
