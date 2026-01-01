@@ -20,7 +20,7 @@ export  ENM,save_enm,
         #Allosteric.jl
         generate_task,load_task
         #MSM:
-        rigid_align!,project_modes_rigid,simulate_and_record
+        rigid_align!,mode_basis,project_modes_rigid
 
 
 end # module PhyLearn_EN
