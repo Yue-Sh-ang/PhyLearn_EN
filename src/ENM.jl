@@ -782,17 +782,17 @@ function plot_net_3d(
 end
 
 
-function plot_displacement(pts::Matrix{Float64},vec::AbstractVector{<:Real}; scale::Float64=1.0)
-    dim = size(pts, 2)
+function plot_displacement(enm::ENM,vec::AbstractVector{<:Real}; scale::Float64=1.0,current::Bool=false)
+    dim = size(enm.pts, 2)
     @assert dim == 2 || dim == 3
 
-    n = size(pts, 1)
+    n = size(enm.pts, 1)
     @assert length(vec) == dim*n "Length of vec must be dim * n"
 
     
     edges = enm.edges
     ne    = length(edges)
-
+    pts= current ? enm.pts : enm.pts0
     displaced_pts = similar(pts)
     @inbounds for i in 1:n
         for d in 1:dim
@@ -809,13 +809,12 @@ function plot_displacement(pts::Matrix{Float64},vec::AbstractVector{<:Real}; sca
             u, v = edges[i]
             lines!(ax, [pts[u,1], pts[v,1]], [pts[u,2], pts[v,2]]; color = :grey, linewidth = 1,linestyle = :dash)
         end
-
         # displaced network
         for i in 1:ne
             u, v = edges[i]
             lines!(ax, [displaced_pts[u,1], displaced_pts[v,1]], [displaced_pts[u,2], displaced_pts[v,2]]; color = :red, linewidth = 1.5)
         end
-
+        
         Makie.scatter!(ax, pts[:, 1], pts[:, 2]; color = :grey, markersize = 6)
         Makie.scatter!(ax, displaced_pts[:, 1], displaced_pts[:, 2]; color = :red, markersize = 6)
 
