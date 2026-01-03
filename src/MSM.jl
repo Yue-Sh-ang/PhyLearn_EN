@@ -32,7 +32,7 @@ function rigid_align!(X::Matrix{Float64}, Xref::Matrix{Float64})
     return nothing
 end
 
-@inline vec_pts(pts::Matrix{Float64}) = reshape(pts, :, 1)[:,1]
+@inline vec_pts(pts::Matrix{Float64}) = reshape(permutedims(pts), :, 1)[:,1]
 
 function mode_basis(enm::ENM; k::Int=10)
     #dim=2 or 3 only
@@ -72,4 +72,70 @@ function project_modes_rigid(enm::ENM, Φ::Matrix{Float64})
 end
 
 
-#usage can be find at chatgpt... take a break now :)
+function tica(X::AbstractMatrix;
+              lag::Int=10,
+              k::Union{Nothing,Int}=nothing,
+              center::Bool=true,
+              standardize::Bool=true,
+              reg::Real=1e-8,
+              symmetrize::Bool=true)
+
+
+    T, d = size(X)
+    @assert 1 ≤ lag < T "lag must satisfy 1 ≤ lag < number of frames"
+
+    # Work in Float64 for stability
+    Xf = Array{Float64}(X)
+
+    # Preprocess: center + (optional) standardize
+    μ = center ? vec(mean(Xf; dims=1)) : zeros(Float64, d)
+    Xc = Xf .- μ'
+
+    σ = ones(Float64, d)
+    if standardize
+        σ = vec(std(Xc; dims=1))
+        σ .+= 1e-12                 # avoid division by zero
+        Xc ./= σ'
+    end
+
+    # Build time-lagged pairs
+    X0 = @view Xc[1:(T-lag), :]
+    Xτ = @view Xc[(1+lag):T, :]
+    n = size(X0, 1)
+
+    # Covariances
+    C0 = (X0' * X0) / n
+    Cτ = (X0' * Xτ) / n
+
+    if symmetrize
+        Cτ = 0.5 * (Cτ + Cτ')
+    end
+
+    # Regularize C0 (helps when features are correlated / near-singular)
+    C0r = C0 + reg * I
+
+    # Solve generalized eigenproblem: Cτ v = λ C0 v
+    F = eigen(Symmetric(Cτ), Symmetric(C0r))
+    vals = F.values
+    vecs = F.vectors
+
+    # Sort by descending eigenvalue magnitude (usually descending value)
+    perm = sortperm(vals; rev=true)
+    vals = vals[perm]
+    vecs = vecs[:, perm]
+
+    kk = (k === nothing) ? d : min(k, d)
+    W = vecs[:, 1:kk]
+    eigvals = vals[1:kk]
+    project = function (Xnew::AbstractMatrix)
+        Xn = Array{Float64}(Xnew)
+        @assert size(Xn, 2) == d "Xnew must have the same feature dimension d=$d"
+        Xn = Xn .- μ'
+        if standardize
+            Xn ./= σ'
+        end
+        return Xn * W
+    end
+
+    return (W=W, eigvals=eigvals, mean=μ, scale=σ, lag=lag, project=project)
+end

@@ -10,9 +10,10 @@ export  ENM,save_enm,
         cal_elastic_energy,cal_kinetic_energy,
         cal_strain,put_strain!,
         cal_elastic_jacobian,cal_modes,
-        plot_net,
+        plot_net,plot_displacement,
         save_k,load_k,
         save_pts,load_pts,
+
         #CL
         Trainer_CL,set_edge_k!,set_edge_l0!,update_k!,update_grad!,load_trainer_CL,
         #allosteric
@@ -20,7 +21,6 @@ export  ENM,save_enm,
         #Allosteric.jl
         generate_task,load_task
         #MSM:
-        rigid_align!,mode_basis,project_modes_rigid
-
+        rigid_align!,mode_basis,project_modes_rigid,tica
 
 end # module PhyLearn_EN
