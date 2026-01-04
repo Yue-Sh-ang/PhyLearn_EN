@@ -27,8 +27,8 @@ task_path = "/data2/shared/yueshang/julia/dim$(dim)/network$(network_id)/task$(t
 
 enm=ENM(net_file)
 input,output=load_task(task_path)
-
-load_k(enm, joinpath(task_path, "trainT$(trainT)_alpha$(alpha)_tw$(timewindow)/seed$(seed)/k$(traintime).f64"))
+trainpath=joinpath(task_path, "trainT$(trainT)_alpha$(alpha)_tw$(timewindow)","seed$(seed)")
+load_k(enm, joinpath(trainpath, "k$(traintime).f64"))
 n_soft=10
 phi,lambda = PhyLearn_EN.mode_basis(enm, k=n_soft)
 
@@ -38,7 +38,7 @@ if strain_source != 0.0
 end
 
 
-test_path=joinpath(task_path, "MSM_testT$(testT)_strain$(strain_source)_seed$(seed)/")
+test_path=joinpath(trainpath, "MSM_testT$(testT)_strain$(strain_source)_seed$(seed)/")
 mkpath(test_path)
 data    = Matrix{Float32}(undef, n_frames, n_soft)
 sout= Vector{Float32}(undef, n_frames)
