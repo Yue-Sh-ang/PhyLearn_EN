@@ -30,7 +30,7 @@ input,output=load_task(task_path)
 
 load_k(enm, joinpath(task_path, "trainT$(trainT)_alpha$(alpha)_tw$(timewindow)/seed$(seed)/k$(traintime).f64"))
 n_soft=10
-phi,lambda = mode_basis(enm, k=n_soft)
+phi,lambda = PhyLearn_EN.mode_basis(enm, k=n_soft)
 
 #put strain
 if strain_source != 0.0
@@ -46,8 +46,8 @@ for stepid in 1:n_frames
     
     rng=StableRNG(seed2+stepid)
     run_md!(enm,testT,steps=record_per, rng=rng)
-    data[stepid, :] .= project_modes_rigid(enm, phi)
-    sout[stepid] = cal_strain(enm, output[1][1])
+    data[stepid, :] .= PhyLearn_EN.project_modes_rigid(enm, phi)
+    sout[stepid] = PhyLearn_EN.cal_strain(enm, output[1][1])
 
 end
 
