@@ -1,4 +1,5 @@
 # To record locations of the markov state model
+# adding protential energy
 using PhyLearn_EN
 using StableRNGs
 #train info
@@ -40,22 +41,27 @@ end
 
 test_path=joinpath(trainpath, "MSM_testT$(testT)_strain$(strain_source)_seed$(seed)/")
 mkpath(test_path)
-data    = Matrix{Float32}(undef, n_frames, n_soft)
-sout= Vector{Float32}(undef, n_frames)
+# data    = Matrix{Float32}(undef, n_frames, n_soft)
+# sout= Vector{Float32}(undef, n_frames)
+Potential = Vector{Float32}(undef, n_frames)
 for stepid in 1:n_frames
     
     rng=StableRNG(seed2+stepid)
     run_md!(enm,testT,steps=record_per, rng=rng)
-    data[stepid, :] .= PhyLearn_EN.project_modes_rigid(enm, phi)
-    sout[stepid] = PhyLearn_EN.cal_strain(enm, output[1][1])
-
+    #data[stepid, :] .= PhyLearn_EN.project_modes_rigid(enm, phi)
+    #sout[stepid] = PhyLearn_EN.cal_strain(enm, output[1][1])
+    Potential[stepid] = Float32(PhyLearn_EN.cal_elastic_energy(enm))
 end
 
-open(joinpath(test_path, "data10modes.f32"), "w") do file
-    write(file, Float32.(data))
-end
+# open(joinpath(test_path, "data10modes.f32"), "w") do file
+#     write(file, Float32.(data))
+# end
 
-open(joinpath(test_path, "strain.f32"), "w") do file
-    write(file, Float32.(sout))
+# open(joinpath(test_path, "strain.f32"), "w") do file
+#     write(file, Float32.(sout))
+# end
+
+open(joinpath(test_path, "potential.f32"), "w") do file
+    write(file, Float32.(Potential))
 end
 
