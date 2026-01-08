@@ -1,6 +1,8 @@
 
-using LinearAlgebra, Random
-using Plots
+import LinearAlgebra
+import Random
+import Plots
+import CairoMakie
 
 struct ENM
     dim::Int                    #adding dim
@@ -122,7 +124,7 @@ function ENM(filename; m=1.0, T0=0.0,seed=123)
     # initial velocities
     Random.seed!(seed)
     for i in 1:n
-        vel[i, :] = randn(dim) * sqrt(T0/m)
+        vel[i, :] = Random.randn(dim) * sqrt(T0/m)
     end
 
     return ENM(dim,n, pts0,pts, vel, edges, kvec, lvec,
@@ -139,7 +141,7 @@ function add_edge!(enm::ENM, nodei::Int, nodej::Int; k::Float64=0.0)
     end
 
     push!(enm.edges, (nodei, nodej))
-    l0_norm=norm(enm.pts[nodei,:]-enm.pts[nodej,:])
+    l0_norm=LinearAlgebra.norm(enm.pts[nodei,:]-enm.pts[nodej,:])
     push!(enm.l0, l0_norm)
     push!(enm.k, k)
     return length(enm.edges)
@@ -222,7 +224,7 @@ function cal_elastic_energy(enm::ENM)
         (u,v) = enm.edges[i]
 
         dx = enm.pts[v, :] .- enm.pts[u, :]
-        dist = norm(dx)
+        dist = LinearAlgebra.norm(dx)
 
         if dist == 0
             continue
@@ -246,11 +248,11 @@ end
 function cal_strain(enm::ENM, edge::Int;l0::Union{Nothing,Float64}=nothing)
     (nodei, nodej) = enm.edges[edge]
      # calculate strain of a specific edge
-    dist = norm(enm.pts[nodej, :] .- enm.pts[nodei, :])
+    dist = LinearAlgebra.norm(enm.pts[nodej, :] .- enm.pts[nodei, :])
     if l0 !== nothing
         return (dist - l0) / l0
     end
-    l0 = norm(enm.pts0[nodej, :] .- enm.pts0[nodei, :])
+    l0 = LinearAlgebra.norm(enm.pts0[nodej, :] .- enm.pts0[nodei, :])
    
     return (dist - l0) / l0
 end
@@ -258,7 +260,7 @@ end
 #put strain on an adge
 function put_strain!(enm::ENM, edge::Int,strain::Float64; k=100)
     (u,v)= enm.edges[edge]
-    l0 = norm(enm.pts0[v, :] .- enm.pts0[u, :])
+    l0 = LinearAlgebra.norm(enm.pts0[v, :] .- enm.pts0[u, :])
     enm.l0[edge] = l0 * (1 + strain)
     enm.k[edge] = k
     return nothing
@@ -279,7 +281,7 @@ function run_md!(
     steps::Int=1,
     dt::Float64=0.005,
     tau::Float64=1.0,
-    rng::AbstractRNG = Random.default_rng())
+    rng::Random.AbstractRNG = Random.default_rng())
     
     m = enm.m
     α = m / tau
@@ -299,7 +301,7 @@ function run_md!(
 
     @inbounds for _ in 1:steps
         # draw β^{n+1}
-        randn!(rng, β)
+        Random.randn!(rng, β)
         @. β *= βscale
 
         # r^{n+1}
@@ -511,12 +513,13 @@ end
 
 function cal_modes(enm::ENM,current::Bool=false)
     J = cal_elastic_jacobian(enm,current)
-    eigen(J)
+    LinearAlgebra.eigen(J)
 end
 
 #--------- plotting functions ---------
 
 function plot_net(enm::ENM;
+    ax::Union{Nothing,Plots.Axis} = nothing,
     input::Union{Nothing,Vector{Tuple{Int,Float64,Float64}}} = nothing,
     output::Union{Nothing,Vector{Tuple{Int,Float64,Float64}}} = nothing,
     camera::Tuple{<:Real,<:Real} = (30, 30),
@@ -541,19 +544,18 @@ function plot_net(enm::ENM;
         end
     end
     if enm.dim == 2
-        return plot_net_2d(enm; input=input_edges, output=output_edges, color=color)
+        return plot_net_2d(enm; ax=ax, input=input_edges, output=output_edges, color=color)
     elseif enm.dim == 3
-        return plot_net_3d(enm; input=input_edges, output=output_edges, camera=camera, color=color)
+        return plot_net_3d(enm; ax=ax, input=input_edges, output=output_edges, camera=camera, color=color)
     else
         error("Unsupported dimension: $(enm.dim). Only 2D and 3D are supported.")
     end
 end
 
 
-using CairoMakie 
-
 function plot_net_2d(
     enm::ENM;
+    ax::Union{Nothing,Plots.Axis} = nothing,
     input::Union{Nothing,AbstractVector{<:Integer}} = nothing,
     output::Union{Nothing,AbstractVector{<:Integer}} = nothing,
     color::Union{Nothing,Symbol,String,AbstractVector{<:Real}} = nothing)
@@ -578,47 +580,49 @@ function plot_net_2d(
 
     # --- Build line collections as vectors of Point2f: pairs are segments ---
     # normal segments
-    normal_seg = Point2f[]
+    normal_seg = CairoMakie.Point2f[]
     sizehint!(normal_seg, 2 * length(normal_idxs))
     for idx in normal_idxs
         u, v = edges[idx]
         @assert 1 ≤ u ≤ N && 1 ≤ v ≤ N "Edge has node index out of bounds: ($u,$v)"
-        push!(normal_seg, Point2f(pts[u, 1], pts[u, 2]))
-        push!(normal_seg, Point2f(pts[v, 1], pts[v, 2]))
+        push!(normal_seg, CairoMakie.Point2f(pts[u, 1], pts[u, 2]))
+        push!(normal_seg, CairoMakie.Point2f(pts[v, 1], pts[v, 2]))
     end
 
     # input segments
-    input_seg = Point2f[]
+    input_seg = CairoMakie.Point2f[]
     if !isempty(input_set)
         sizehint!(input_seg, 2 * length(input_set))
         for idx in input_set
             u, v = edges[idx]
-            push!(input_seg, Point2f(pts[u, 1], pts[u, 2]))
-            push!(input_seg, Point2f(pts[v, 1], pts[v, 2]))
+            push!(input_seg, CairoMakie.Point2f(pts[u, 1], pts[u, 2]))
+            push!(input_seg, CairoMakie.Point2f(pts[v, 1], pts[v, 2]))
         end
     end
 
     # output segments
-    output_seg = Point2f[]
+    output_seg = CairoMakie.Point2f[]
     if !isempty(output_set)
         sizehint!(output_seg, 2 * length(output_set))
         for idx in output_set
             u, v = edges[idx]
-            push!(output_seg, Point2f(pts[u, 1], pts[u, 2]))
-            push!(output_seg, Point2f(pts[v, 1], pts[v, 2]))
+            push!(output_seg, CairoMakie.Point2f(pts[u, 1], pts[u, 2]))
+            push!(output_seg, CairoMakie.Point2f(pts[v, 1], pts[v, 2]))
         end
     end
 
     # --- Figure / Axis ---
-    fig = Figure(size = (500, 500))
-    ax  = Axis(fig[1, 1]; aspect = DataAspect(), xlabel = "x", ylabel = "y")
+    if ax === nothing
+        fig = CairoMakie.Figure(size = (500, 500))
+        ax  = CairoMakie.Axis(fig[1, 1]; aspect = CairoMakie.DataAspect(), xlabel = "x", ylabel = "y")
+    end
 
     # --- Normal edges (colormapped or black) ---
     normal_plot = nothing
 
     if color === nothing
         if !isempty(normal_seg)
-            linesegments!(ax, normal_seg; color = :grey, linewidth = 1.5)
+            CairoMakie.linesegments!(ax, normal_seg; color = :grey, linewidth = 1.5)
         end
     else
         # values used for coloring only normal edges
@@ -642,7 +646,7 @@ function plot_net_2d(
 
             # `linesegments` accepts one scalar per segment (i.e., per edge)
             # Here: number of segments == length(normal_idxs)
-            normal_plot = linesegments!(
+            normal_plot = CairoMakie.linesegments!(
                 ax, normal_seg;
                 color      = vals,
                 colormap   = :viridis,
@@ -651,20 +655,20 @@ function plot_net_2d(
             )
 
             # colorbar reflects ONLY normal edges
-            Colorbar(fig[1, 2], normal_plot; label = "edge color (normal edges)")
+            CairoMakie.Colorbar(fig[1, 2], normal_plot; label = "edge color (normal edges)")
         end
     end
 
     # --- Special edges (dashed, fixed colors; excluded from colorbar by construction) ---
     if !isempty(input_seg)
-        linesegments!(ax, input_seg; color = :darkblue, linestyle = :dash, linewidth = 2.4)
+        CairoMakie.linesegments!(ax, input_seg; color = :darkblue, linestyle = :dash, linewidth = 2.4)
     end
     if !isempty(output_seg)
-        linesegments!(ax, output_seg; color = :darkred, linestyle = :dash, linewidth = 2.4)
+        CairoMakie.linesegments!(ax, output_seg; color = :darkred, linestyle = :dash, linewidth = 2.4)
     end
 
     # --- Nodes ---
-    Makie.scatter!(ax, pts[:, 1], pts[:, 2]; color = :grey, markersize = 6)
+    CairoMakie.scatter!(ax, pts[:, 1], pts[:, 2]; color = :grey, markersize = 6)
 
     return fig
 end
@@ -672,6 +676,7 @@ end
  
 function plot_net_3d(
     enm::ENM;
+    ax::Union{Nothing,Plots.Axis} = nothing,
     input::Union{Nothing,AbstractVector{<:Integer}} = nothing,
     output::Union{Nothing,AbstractVector{<:Integer}} = nothing,
     camera::Tuple{<:Real,<:Real} = (30, 30),
@@ -697,45 +702,49 @@ function plot_net_3d(
     end
 
     # --- Build line collections (pairs of Point3f are segments) ---
-    normal_seg = Point3f[]
+    normal_seg = CairoMakie.Point3f[]
     sizehint!(normal_seg, 2 * length(normal_idxs))
     for idx in normal_idxs
         u, v = edges[idx]
         @assert 1 ≤ u ≤ N && 1 ≤ v ≤ N "Edge has node index out of bounds: ($u,$v)"
-        push!(normal_seg, Point3f(pts[u, 1], pts[u, 2], pts[u, 3]))
-        push!(normal_seg, Point3f(pts[v, 1], pts[v, 2], pts[v, 3]))
+        push!(normal_seg, CairoMakie.Point3f(pts[u, 1], pts[u, 2], pts[u, 3]))
+        push!(normal_seg, CairoMakie.Point3f(pts[v, 1], pts[v, 2], pts[v, 3]))
     end
 
-    input_seg = Point3f[]
+    input_seg = CairoMakie.Point3f[]
     if !isempty(input_set)
         sizehint!(input_seg, 2 * length(input_set))
         for idx in input_set
             u, v = edges[idx]
-            push!(input_seg, Point3f(pts[u, 1], pts[u, 2], pts[u, 3]))
-            push!(input_seg, Point3f(pts[v, 1], pts[v, 2], pts[v, 3]))
+            push!(input_seg, CairoMakie.Point3f(pts[u, 1], pts[u, 2], pts[u, 3]))
+            push!(input_seg, CairoMakie.Point3f(pts[v, 1], pts[v, 2], pts[v, 3]))
         end
     end
 
-    output_seg = Point3f[]
+    output_seg = CairoMakie.Point3f[]
     if !isempty(output_set)
         sizehint!(output_seg, 2 * length(output_set))
         for idx in output_set
             u, v = edges[idx]
-            push!(output_seg, Point3f(pts[u, 1], pts[u, 2], pts[u, 3]))
-            push!(output_seg, Point3f(pts[v, 1], pts[v, 2], pts[v, 3]))
+            push!(output_seg, CairoMakie.Point3f(pts[u, 1], pts[u, 2], pts[u, 3]))
+            push!(output_seg, CairoMakie.Point3f(pts[v, 1], pts[v, 2], pts[v, 3]))
         end
     end
 
     # --- Figure / LScene (3D) ---
-    fig = Figure(size = (950, 750))
-    ax3 = LScene(fig[1, 1]; scenekw = (show_axis = true,))
+    if ax === nothing
+        fig = CairoMakie.Figure(size = (950, 750))
+        ax3 = CairoMakie.LScene(fig[1, 1]; scenekw = (show_axis = true,))
+    else
+        ax3 = ax
+    end
 
     # --- Normal edges ---
     normal_plot = nothing
 
     if color === nothing
         if !isempty(normal_seg)
-            linesegments!(ax3, normal_seg; color = :grey, linewidth = 1.5)
+            CairoMakie.linesegments!(ax3, normal_seg; color = :grey, linewidth = 1.5)
         end
     else
         vals = if (color == :k || color == "k")
@@ -755,7 +764,7 @@ function plot_net_3d(
             cmax = maximum(vals)
             colorrange = (cmin, cmax)
 
-            normal_plot = linesegments!(
+            normal_plot = CairoMakie.linesegments!(
                 ax3, normal_seg;
                 color      = vals,
                 colormap   = :viridis,
@@ -763,20 +772,20 @@ function plot_net_3d(
                 linewidth  = 1.8
             )
 
-            Colorbar(fig[1, 2], normal_plot; label = "edge color (normal edges)")
+            CairoMakie.Colorbar(fig[1, 2], normal_plot; label = "edge color (normal edges)")
         end
     end
 
     # --- Special edges (dashed, fixed colors; excluded from colorbar) ---
     if !isempty(input_seg)
-        linesegments!(ax3, input_seg; color = :darkblue, linestyle = :dash, linewidth = 2.4)
+        CairoMakie.linesegments!(ax3, input_seg; color = :darkblue, linestyle = :dash, linewidth = 2.4)
     end
     if !isempty(output_seg)
-        linesegments!(ax3, output_seg; color = :darkred, linestyle = :dash, linewidth = 2.4)
+        CairoMakie.linesegments!(ax3, output_seg; color = :darkred, linestyle = :dash, linewidth = 2.4)
     end
 
     # --- Nodes ---
-    Makie.scatter!(ax3, pts[:, 1], pts[:, 2], pts[:, 3]; color = :grey, markersize = 6)
+    CairoMakie.scatter!(ax3, pts[:, 1], pts[:, 2], pts[:, 3]; color = :grey, markersize = 6)
 
     return fig
 end
@@ -801,41 +810,41 @@ function plot_displacement(enm::ENM,vec::AbstractVector{<:Real}; scale::Float64=
     end
 
     if dim == 2
-        fig = Figure(size = (500, 500))
-        ax  = Axis(fig[1, 1]; aspect = DataAspect(), xlabel = "x", ylabel = "y")
+        fig = CairoMakie.Figure(size = (500, 500))
+        ax  = CairoMakie.Axis(fig[1, 1]; aspect = CairoMakie.DataAspect(), xlabel = "x", ylabel = "y")
 
         # original network
         for i in 1:ne
             u, v = edges[i]
-            lines!(ax, [pts[u,1], pts[v,1]], [pts[u,2], pts[v,2]]; color = :grey, linewidth = 1,linestyle = :dash)
+            CairoMakie.lines!(ax, [pts[u,1], pts[v,1]], [pts[u,2], pts[v,2]]; color = :grey, linewidth = 1,linestyle = :dash)
         end
         # displaced network
         for i in 1:ne
             u, v = edges[i]
-            lines!(ax, [displaced_pts[u,1], displaced_pts[v,1]], [displaced_pts[u,2], displaced_pts[v,2]]; color = :red, linewidth = 1.5)
+            CairoMakie.lines!(ax, [displaced_pts[u,1], displaced_pts[v,1]], [displaced_pts[u,2], displaced_pts[v,2]]; color = :red, linewidth = 1.5)
         end
         
-        Makie.scatter!(ax, pts[:, 1], pts[:, 2]; color = :grey, markersize = 6)
-        Makie.scatter!(ax, displaced_pts[:, 1], displaced_pts[:, 2]; color = :red, markersize = 6)
+        CairoMakie.scatter!(ax, pts[:, 1], pts[:, 2]; color = :grey, markersize = 6)
+        CairoMakie.scatter!(ax, displaced_pts[:, 1], displaced_pts[:, 2]; color = :red, markersize = 6)
 
         return fig
 
     else # dim == 3
-        fig = Figure(size = (950, 750))
-        ax3 = LScene(fig[1, 1]; scenekw = (show_axis = true,))
+        fig = CairoMakie.Figure(size = (950, 750))
+        ax3 = CairoMakie.LScene(fig[1, 1]; scenekw = (show_axis = true,))
 
         # original network
         for i in 1:ne
             u, v = edges[i]
-            lines!(ax3, [pts[u,1], pts[v,1]], [pts[u,2], pts[v,2]], [pts[u,3], pts[v,3]]; color = :grey, linewidth = 1, linestyle = :dash)
+            CairoMakie.lines!(ax3, [pts[u,1], pts[v,1]], [pts[u,2], pts[v,2]], [pts[u,3], pts[v,3]]; color = :grey, linewidth = 1, linestyle = :dash)
         end
         # displaced network
         for i in 1:ne
             u, v = edges[i]
-            lines!(ax3, [displaced_pts[u,1], displaced_pts[v,1]], [displaced_pts[u,2], displaced_pts[v,2]], [displaced_pts[u,3], displaced_pts[v,3]]; color = :red, linewidth = 1.5)
+            CairoMakie.lines!(ax3, [displaced_pts[u,1], displaced_pts[v,1]], [displaced_pts[u,2], displaced_pts[v,2]], [displaced_pts[u,3], displaced_pts[v,3]]; color = :red, linewidth = 1.5)
         end     
-        Makie.scatter!(ax3, pts[:, 1], pts[:, 2], pts[:, 3]; color = :grey, markersize = 6)
-        Makie.scatter!(ax3, displaced_pts[:, 1], displaced_pts[:, 2], displaced_pts[:, 3]; color = :red, markersize = 6)
+        CairoMakie.scatter!(ax3, pts[:, 1], pts[:, 2], pts[:, 3]; color = :grey, markersize = 6)
+        CairoMakie.scatter!(ax3, displaced_pts[:, 1], displaced_pts[:, 2], displaced_pts[:, 3]; color = :red, markersize = 6)
         return fig
     end
 end

@@ -1,6 +1,5 @@
-
-using Random
-using LinearAlgebra
+import Random
+import LinearAlgebra
 
 const INPUT = 1
 const OUTPUT = 2
@@ -21,9 +20,9 @@ function Trainer_CL(net::ENM,#the network from allo
                    )
     # this function prepares the basic setting for training
     # denote input and output edges and denote their 
-    edgetype = zeros(Int,length(net.edges))
+    edgetype = LinearAlgebra.zeros(Int,length(net.edges))
 
-    net_f = deepcopy(net)
+    net_f = Base.deepcopy(net)
  #  denote input edges
     for (id_input,st,l0) in input
         edgetype[id_input] = INPUT
@@ -36,8 +35,8 @@ function Trainer_CL(net::ENM,#the network from allo
         net_f.k[id_output] = 0.0
     end
 
-    net_c = deepcopy(net_f)
-    trainable_edges = findall(==(NORMAL), edgetype)
+    net_c = Base.deepcopy(net_f)
+    trainable_edges = Base.findall(==(NORMAL), edgetype)
     return Trainer_CL(input, output, trainable_edges, net_f, net_c)
 end
 
@@ -56,11 +55,11 @@ function update_k!(tr::Trainer_CL, grad::Vector{Float64}, alpha, vmin=1e-3, vmax
     kc = tr.net_c.k
        # indices where edge_type == 0
     idxs = tr.trainable_edges
-    @inbounds @simd for j in eachindex(idxs)
+    @inbounds @simd for j in Base.eachindex(idxs)
         i = idxs[j]
 
         newk = kf[i] - alpha * grad[i]
-        newk = clamp(newk, vmin, vmax)
+        newk = Base.clamp(newk, vmin, vmax)
 
         kf[i] = newk
         kc[i] = newk   
@@ -82,34 +81,34 @@ function update_grad!(tr::Trainer_CL, grad::Vector{Float64})
     @assert dim == 2 || dim == 3
 
     if dim == 2
-        @inbounds @simd for ide in eachindex(l0f)
+        @inbounds @simd for ide in Base.eachindex(l0f)
             u, v = edges[ide]
 
             dx_f = pts_f[v,1] - pts_f[u,1]
             dy_f = pts_f[v,2] - pts_f[u,2]
-            lf   = sqrt(dx_f*dx_f + dy_f*dy_f)
+            lf   = LinearAlgebra.sqrt(dx_f*dx_f + dy_f*dy_f)
 
             dx_c = pts_c[v,1] - pts_c[u,1]
             dy_c = pts_c[v,2] - pts_c[u,2]
-            lc   = sqrt(dx_c*dx_c + dy_c*dy_c)
+            lc   = LinearAlgebra.sqrt(dx_c*dx_c + dy_c*dy_c)
 
             δc = lc - l0c[ide]
             δf = lf - l0f[ide]
             grad[ide] += δc*δc - δf*δf
         end
     else
-        @inbounds @simd for ide in eachindex(l0f)
+        @inbounds @simd for ide in Base.eachindex(l0f)
             u, v = edges[ide]
 
             dx_f = pts_f[v,1] - pts_f[u,1]
             dy_f = pts_f[v,2] - pts_f[u,2]
             dz_f = pts_f[v,3] - pts_f[u,3]
-            lf   = sqrt(dx_f*dx_f + dy_f*dy_f + dz_f*dz_f)
+            lf   = LinearAlgebra.sqrt(dx_f*dx_f + dy_f*dy_f + dz_f*dz_f)
 
             dx_c = pts_c[v,1] - pts_c[u,1]
             dy_c = pts_c[v,2] - pts_c[u,2]
             dz_c = pts_c[v,3] - pts_c[u,3]
-            lc   = sqrt(dx_c*dx_c + dy_c*dy_c + dz_c*dz_c)
+            lc   = LinearAlgebra.sqrt(dx_c*dx_c + dy_c*dy_c + dz_c*dz_c)
 
             δc = lc - l0c[ide]
             δf = lf - l0f[ide]
@@ -121,7 +120,7 @@ function update_grad!(tr::Trainer_CL, grad::Vector{Float64})
 end
 
 function load_trainer_CL(tr::Trainer_CL)
-    net=deepcopy(tr.net_f)
+    net = Base.deepcopy(tr.net_f)
     
     for ip in tr.input
         set_edge_k!(net, ip[1], 0.0)
@@ -136,76 +135,3 @@ function load_trainer_CL(tr::Trainer_CL)
 
     return net
 end
-
-
-
-# # one exampe of training: eta always 1
-# function step!(tr::Trainer_CL,T;sf_old= nothing, eta=1.0, alpha=1.0, step_md=10)
-#     #learning information reset
-#     Gradient=zeros(length(tr.net_f.edges))
-#     sf_new = zeros(length(tr.output))
-#     #clamped
-#     set_edge_l0!(tr.net_c,tr.output[1][1], (1+tr.output[1][2])*tr.output[1][3]) # set the first output edge to zero stiffness
-#     set_edge_k!(tr.net_c,tr.output[1][1], 100)
-#     run_md!(tr.net_c,T,step=500) # equilibrate the clamped network
-    
-    
-#     for _ in 1:step_md
-#         run_md!(tr.net_f,T)
-#         run_md!(tr.net_c,T)
-#         # update gradient
-#         update_Gradient!(tr, Gradient)
-#         #update current free strains
-#         for (ido,(edge,_,_,l0)) in enumerate(tr.output)
-#             nodei, nodej = tr.net_f.edges[edge]
-#             dist=norm(tr.net_f.pts[nodej, :] .- tr.net_f.pts[nodei, :])
-#             sf_new[ido] += (dist - l0)/l0
-#         end
-#     end
-
-#     Gradient=Gradient ./ step_md
-#     sf_new .= sf_new ./ step_md
-    
-#     # stiffness update
-#     learn_k!(tr, Gradient, alpha)
-   
-#     return sf_new # return current free strains on output edges 
-# end
-
-
-# function step!(tr::Trainer_CL,T;sf_old= nothing, eta=1.0, alpha=1.0, step_md=10)
-#     #learning information reset
-#     Gradient=zeros(length(tr.net_f.edges))
-#     sf_new = zeros(length(tr.output))
-
-#     if sf_old != nothing
-#         clamp_eta!(tr,sf_old,eta)
-#     else
-#         clamp_eta!(tr,zeros(length(tr.output)), eta)
-#     end
-    
-
-    
-    
-#     for _ in 1:step_md
-#         run_md!(tr.net_f,T)
-#         run_md!(tr.net_c,T)
-#         # update gradient
-#         update_Gradient!(tr, Gradient)
-#         #update current free strains
-#         for (ido,(edge,_,_,l0)) in enumerate(tr.output)
-#             nodei, nodej = tr.net_f.edges[edge]
-#             dist=norm(tr.net_f.pts[nodej, :] .- tr.net_f.pts[nodei, :])
-#             sf_new[ido] += (dist - l0)/l0
-#         end
-#     end
-
-#     Gradient=Gradient ./ step_md
-#     sf_new .= sf_new ./ step_md
-    
-#     # stiffness update
-#     learn_k!(tr, Gradient, alpha)
-   
-#     return sf_new # return current free strains on output edges 
-# end
-

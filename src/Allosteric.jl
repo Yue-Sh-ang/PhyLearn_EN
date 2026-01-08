@@ -1,9 +1,9 @@
 # to find allosteric sites in ENM
-using Graphs
+import Graphs
 import SimpleWeightedGraphs as SWG
-using Random
-using LinearAlgebra
-using Statistics
+import Random
+import LinearAlgebra
+import Statistics
 
 function build_graph(enm::ENM)
     g = SWG.SimpleWeightedGraph(enm.n)
@@ -28,7 +28,7 @@ function cal_edge_distance(g::SWG.SimpleWeightedGraph, enm::ENM, edge1::Int, edg
         spdist(g, u, l),
         spdist(g, v, k),
         spdist(g, v, l))
-    return mean(dists)
+    return Statistics.mean(dists)
 end
 
 function choose_new_edge(enm::ENM,strain::Float64; inout::Union{Vector{Tuple{Int,Float64,Float64}}, Nothing}=nothing,Distant=true,seed::Int=1234)
@@ -61,7 +61,7 @@ function choose_new_edge(enm::ENM,strain::Float64; inout::Union{Vector{Tuple{Int
     end
 
     if inout===nothing || !Distant
-        selected_edge = edge_candidates[rand(1:length(edge_candidates))]
+        selected_edge = edge_candidates[Random.rand(1:length(edge_candidates))]
     else
         g=build_graph(enm)
         max_dist=-1.0

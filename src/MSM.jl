@@ -2,27 +2,27 @@
 # documenting the projections onto the softest modes
 # then do TICA and clustering to build MSM
 
-using LinearAlgebra
-using Random
-using Statistics
-using JLD2
-using Clustering
+import LinearAlgebra
+import Random
+import Statistics
+import JLD2
+import Clustering
 
 function rigid_align!(X::Matrix{Float64}, Xref::Matrix{Float64})
     # subtract centroids
-    cX    = mean(X; dims=1)
-    cXref = mean(Xref; dims=1)
+    cX    = Statistics.mean(X; dims=1)
+    cXref = Statistics.mean(Xref; dims=1)
 
     Xc    = X    .- cX
     Xrefc = Xref .- cXref
 
     # covariance
     H = Xc' * Xrefc
-    U, _, Vt = svd(H)
+    U, _, Vt = LinearAlgebra.svd(H)
     R = Vt' * U'
 
     # reflection fix
-    if det(R) < 0
+    if LinearAlgebra.det(R) < 0
         Vt[end, :] .*= -1
         R = Vt' * U'
     end
@@ -88,12 +88,12 @@ function tica(X::AbstractMatrix;
     Xf = Array{Float64}(X)
 
     # Preprocess: center + (optional) standardize
-    μ = center ? vec(mean(Xf; dims=1)) : zeros(Float64, d)
+    μ = center ? vec(Statistics.mean(Xf; dims=1)) : zeros(Float64, d)
     Xc = Xf .- μ'
 
     σ = ones(Float64, d)
     if standardize
-        σ = vec(std(Xc; dims=1))
+        σ = vec(Statistics.std(Xc; dims=1))
         σ .+= 1e-12                 # avoid division by zero
         Xc ./= σ'
     end
@@ -112,10 +112,10 @@ function tica(X::AbstractMatrix;
     end
 
     # Regularize C0 (helps when features are correlated / near-singular)
-    C0r = C0 + reg * I
+    C0r = C0 + reg * LinearAlgebra.I
 
     # Solve generalized eigenproblem: Cτ v = λ C0 v
-    F = eigen(Symmetric(Cτ), Symmetric(C0r))
+    F = LinearAlgebra.eigen(LinearAlgebra.Symmetric(Cτ), LinearAlgebra.Symmetric(C0r))
     vals = F.values
     vecs = F.vectors
 
