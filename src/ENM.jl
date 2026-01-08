@@ -513,7 +513,8 @@ end
 
 function cal_modes(enm::ENM,current::Bool=false)
     J = cal_elastic_jacobian(enm,current)
-    LinearAlgebra.eigen(J)
+    J= 0.5 * (J + J')  # ensure symmetry
+    LinearAlgebra.eigen(LinearAlgebra.Symmetric(J))
 end
 
 #--------- plotting functions ---------
