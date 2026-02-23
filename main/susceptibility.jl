@@ -21,7 +21,7 @@ alpha = parse(Float64, ARGS[10])
 const TIMEWINDOW = 200
 const CAL_PER = 2000
 const N_FRAMES = 5000
-const ROOT = "/data2/shared/yueshang/julia/"
+const ROOT = "/vast/projects/ajliu/liu/yueshang/data/PhyLearn_EN"
 
 # Setup paths
 net_file = joinpath(ROOT, "dim$(dim)", "network$(network_id)", "network.txt")

@@ -21,9 +21,9 @@ record_per = 100000 #500tau
 n_frames= 2000
 
 
-root="/data2/shared/yueshang/julia/"
-net_file =  "/data2/shared/yueshang/julia/dim$(dim)/network$(network_id)/network.txt"
-task_path = "/data2/shared/yueshang/julia/dim$(dim)/network$(network_id)/task$(taskid)/"
+root="/vast/projects/ajliu/liu/yueshang/data/PhyLearn_EN"
+net_file =  joinpath(root,"dim$(dim)","network$(network_id)","network.txt")
+task_path = joinpath(root,"dim$(dim)","network$(network_id)","task$(taskid)")
 
 enm=ENM(net_file)
 input,output=load_task(task_path)

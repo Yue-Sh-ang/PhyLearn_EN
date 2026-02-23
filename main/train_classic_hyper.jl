@@ -19,9 +19,10 @@ print_per=1000_000
 
 println("Dimension: $(dim), Network ID: $(network_id), taskid: $(taskid), Training Temperature: $(trainT)")
 
-root="/data2/shared/yueshang/julia/"
-net_file =  "/data2/shared/yueshang/julia/dim$(dim)/network$(network_id)/network.txt"
-task_path = "/data2/shared/yueshang/julia/dim$(dim)/network$(network_id)/task$(taskid)/"
+root="/vast/projects/ajliu/liu/yueshang/data/PhyLearn_EN"
+net_file =  joinpath(root,"dim$(dim)","network$(network_id)","network.txt")
+task_path = joinpath(root,"dim$(dim)","network$(network_id)","task$(taskid)")
+
 net=ENM(net_file)
 if !isdir(task_path)
     mkdir(task_path)
