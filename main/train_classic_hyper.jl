@@ -1,5 +1,6 @@
 using PhyLearn_EN
 using StableRNGs
+using NPZ
 dim=parse(Int, ARGS[1])
 network_id=parse(Int, ARGS[2])
 taskid=parse(Int, ARGS[3])
@@ -13,11 +14,10 @@ trainsteps=parse(Int, ARGS[7])+1
 timewindow=200
 
 
-save_per=2_000_000
-print_per=1000_000
+save_per=100_000
+print_per=20_000
 
 
-println("Dimension: $(dim), Network ID: $(network_id), taskid: $(taskid), Training Temperature: $(trainT)")
 
 root="/vast/projects/ajliu/liu/yueshang/data/PhyLearn_EN"
 net_file =  joinpath(root,"dim$(dim)","network$(network_id)","network.txt")
@@ -49,6 +49,11 @@ end
 trainpath=joinpath(task_path, "trainT$(trainT)_alpha$(alpha)_tw$(timewindow)","seed$(seed)")
 rng=StableRNG(seed)
 mkpath(trainpath)
+E_f_list = Float64[]
+E_c_list = Float64[]
+strain_list = Float64[]
+step_list = Int[]
+
 t0=time()
 for stepid in 1:trainsteps
     Gradient=zeros(length(train0.net_f.edges))
@@ -58,19 +63,35 @@ for stepid in 1:trainsteps
         update_grad!(train0, Gradient)
     end
     update_k!(train0, Gradient, alpha)
-    if stepid%print_per==0
+    if stepid%print_per==0 || stepid==1
         E_f=cal_elastic_energy(train0.net_f)
         E_c=cal_elastic_energy(train0.net_c)
         strain_f_out=cal_strain(train0.net_f,train0.output[1][1])# this is only for one output edge
-        println("Step: $(stepid), E_f: $(E_f), E_c: $(E_c), strain: $(strain_f_out)")
+        push!(E_f_list, E_f)
+        push!(E_c_list, E_c)
+        push!(strain_list, strain_f_out)
+        push!(step_list, stepid)
     end
 
-    if stepid==trainsteps-1
+    if stepid%save_per==0 || stepid==1
         save_k(train0.net_f, joinpath(trainpath, "k$(stepid).f64"))
         save_pts(train0.net_f, joinpath(trainpath, "pts$(stepid).f64"))
-        
+        #Also document the gradient
+	open(joinpath(trainpath, "Grad$(stepid).f64"),"w") do io
+		write(io,Gradient)
+	end
     end
     
 end
-println("trainingtime = ", time() - t0, " s")
+timereal=time() - t0
+
+npzwrite(joinpath(trainpath, "training_log.npz"),
+    Dict(
+        "step" => step_list,
+        "E_f" => E_f_list,
+        "E_c" => E_c_list,
+        "strain" => strain_list,
+        "train_time" =>timereal
+       )
+)
 

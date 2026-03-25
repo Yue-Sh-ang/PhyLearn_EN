@@ -35,6 +35,8 @@ phi,lambda = PhyLearn_EN.mode_basis(enm, k=n_soft)
 #put strain
 if strain_source != 0.0
      put_strain!(enm, input[1][1], strain_source)
+else
+    enm.k[input[1][1]]=0.0 #update! if there is no source strain, then put the stiffness to be 0
 end
 
 
