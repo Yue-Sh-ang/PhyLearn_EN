@@ -126,11 +126,9 @@ class ENM:
                 R[e, dim * j + d] = unit_ij[d]
         return R
     
-    def jacobian_matrix(self, current: bool = False,bounded: bool = False):
+    def jacobian_matrix(self, current: bool = False,kin=None,kout=None,l0in=None,l0out=None):
         """Calculate elastic Jacobian matrix.
-        
-        Args:
-            current: If True, cal matrix using current pts; if False, use pts0
+        current: if False, use pts0, if True, use the current pts 
         """
         dim = self.dim
         assert dim == 2 or dim == 3, "Dimension must be 2 or 3"
@@ -139,13 +137,26 @@ class ENM:
         
         pts = self.pts if current else self.pts0
         k=self.k.copy()
-        if bounded:
-            for e,_,_ in self.input:
-                k[e]=100.0
-        else:
+        l0=self.l0.copy()
+        if kin is None:
             for e,_,_ in self.input:
                 k[e]=0.0
-    
+        else:
+            for e,_,_ in self.input:
+                k[e]=kin
+        if kout is None:
+            for e,_,_ in self.output:
+                k[e]=0.0
+        else:
+           for e,_,_ in self.output:
+                k[e]=kout
+        if l0in is not None:
+            for e,_,_ in self.input:
+                l0[e]=l0in
+        if l0out is not None:
+            for e,_,_ in self.output:
+                l0[e]=l0out
+            
         for i in range(self.ne):
             u, v = self.edges[i]
             
@@ -159,9 +170,9 @@ class ENM:
             dist = np.sqrt(dist2)
             
             ki = k[i]
-            l0i = self.l0[i]
+            l0i = l0[i]
             
-            term1 = ki * (1 - l0i / dist)
+            term1 = ki * (1 - l0i / dist) 
             term2 = ki * l0i / (dist ** 3)
             
             bu = u * dim
@@ -184,6 +195,108 @@ class ENM:
         pts_new= a @ R
         return pts_new
 
+
+
+    def mode_participation(self, mode, dof_order="interleaved", normalize=True):
+        u = np.asarray(mode)
+        n = self.pts.shape[0]
+
+        if u.ndim == 1:
+            if u.size != n * self.dim:
+                raise ValueError(
+                    f"mode has {u.size} entries, expected {n * self.dim} "
+                    f"(= n_nodes {n} x dim {self.dim})."
+                )
+            u = u.reshape(-1, self.dim) if dof_order == "interleaved" \
+                else u.reshape(self.dim, -1).T
+        elif u.shape != (n, self.dim):
+            raise ValueError(f"mode of shape {u.shape} is not ({n}, {self.dim}).")
+
+        e = np.sum(np.abs(u) ** 2, axis=1)          # works for complex modes too
+        if normalize:
+            tot = e.sum()
+            if tot > 0:
+                e = e / tot
+        return e
+    def plot_2d(self, ax=None, color=None, vmin=None, vmax=None, current: bool = True,
+                mode=None, dof_order="interleaved", node_cmap="viridis",
+                node_vmin=None, node_vmax=None, node_size=20, log_node=False,
+                colorbar=True):
+        if self.dim != 2:
+            raise ValueError("Dimension must be 2 for 2D plotting.")
+        pts = self.pts if current else self.pts0
+
+    # ---- edge colors (unchanged behaviour) -------------------------------
+        if color is None:
+            color = 'gray'
+        else:
+            color = np.asarray(color)
+            assert color.size == self.ne
+            if vmin is None:
+                vmin = color.min()
+            if vmax is None:
+                vmax = color.max()
+            denom = (vmax - vmin) or 1.0
+            color = plt.cm.bwr(np.clip((color - vmin) / denom, 0, 1))
+
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+
+    # ---- nodes -----------------------------------------------------------
+        sc = None
+        if mode is None:
+            ax.scatter(pts[:, 0], pts[:, 1], c='black', s=node_size, zorder=3)
+        else:
+            e = self.mode_participation(mode, dof_order=dof_order)
+            vals = np.log10(np.maximum(e, 1e-16)) if log_node else e
+            nvmin = vals.min() if node_vmin is None else node_vmin
+            nvmax = vals.max() if node_vmax is None else node_vmax
+            sc = ax.scatter(pts[:, 0], pts[:, 1], c=vals, cmap=node_cmap,
+                        vmin=nvmin, vmax=nvmax, s=node_size,
+                        zorder=3, edgecolors='none')
+            if colorbar:
+                cb = fig.colorbar(sc, ax=ax)
+                cb.set_label(r"$\log_{10} e_\omega^i$" if log_node else r"$e_\omega^i$")
+
+    # ---- input / output markers -----------------------------------------
+    # when a mode is shown, keep the participation color and ring the node
+        skip_edge = []
+
+        def _mark(u, v, c):
+            if mode is None:
+                ax.scatter(pts[[u, v], 0], pts[[u, v], 1], c=c,
+                       s=node_size + 10, zorder=4)
+            else:
+                ax.scatter(pts[[u, v], 0], pts[[u, v], 1], facecolors='none',
+                       edgecolors=c, linewidths=1.5,
+                       s=node_size + 40, zorder=4)
+
+        if self.input is not None:
+            for edge, _, _ in self.input:
+                skip_edge.append(edge)
+                u, v = self.edges[edge]
+                _mark(u, v, 'blue')
+        if self.output is not None:
+            for edge, _, _ in self.output:
+                skip_edge.append(edge)
+                u, v = self.edges[edge]
+                _mark(u, v, 'red')
+
+    # ---- edges -----------------------------------------------------------
+        skip_edge = set(skip_edge)
+        for i, (u, v) in enumerate(self.edges):
+            if i in skip_edge:
+                continue
+            x = [pts[u, 0], pts[v, 0]]
+            y = [pts[u, 1], pts[v, 1]]
+            ax.plot(x, y, c=color if isinstance(color, str) else color[i],
+                linewidth=1, zorder=2)
+
+        ax.set_aspect('equal')
+        return ax, sc
+    
     # def mode_projection(self, modes: np.ndarray):
     #     """Project current displacement onto given modes.
     #     Args:
@@ -197,54 +310,54 @@ class ENM:
     #     coeffs = modes @ disp
     #     return coeffs
 
-    def plot_2d(self,ax=None,color=None,vmin=None,vmax=None,current: bool = True):
-        if self.dim != 2:
-            raise ValueError("Dimension must be 2 for 2D plotting.")
-        if current:
-            pts = self.pts
-        else:
-            pts = self.pts0
+    # def plot_2d(self,ax=None,color=None,vmin=None,vmax=None,current: bool = True):
+    #     if self.dim != 2:
+    #         raise ValueError("Dimension must be 2 for 2D plotting.")
+    #     if current:
+    #         pts = self.pts
+    #     else:
+    #         pts = self.pts0
 
-        if color is None:
-            color='gray'
-        else:
-            assert color.size==(self.ne)
-            color=np.array(color)
-            if vmin is None:
-                vmin=color.min()
-            if vmax is None:
-                vmax=color.max()
-            color=plt.cm.bwr((color-vmin)/(vmax-vmin))
+    #     if color is None:
+    #         color='gray'
+    #     else:
+    #         assert color.size==(self.ne)
+    #         color=np.array(color)
+    #         if vmin is None:
+    #             vmin=color.min()
+    #         if vmax is None:
+    #             vmax=color.max()
+    #         color=plt.cm.bwr((color-vmin)/(vmax-vmin))
                 
 
-        if ax is None:
-            fig, ax = plt.subplots()
-        #plot the nodes color if there is special nodes(input nodes or output nodes)
-        skip_edge=[]
-        ax.scatter(pts[:, 0], pts[:, 1], c='black', s=20,zorder=1)
-        if self.input is not None:
-            for edge, _, _ in self.input:
-                skip_edge.append(edge)
-                u, v = self.edges[edge]
-                ax.scatter(pts[u, 0], pts[u, 1], c='blue', s=30,zorder=2)
-                ax.scatter(pts[v, 0], pts[v, 1], c='blue', s=30,zorder=2)
-        if self.output is not None:
-            for edge, _, _ in self.output:
-                skip_edge.append(edge)
-                u, v = self.edges[edge]
-                ax.scatter(pts[u, 0], pts[u, 1], c='red', s=30,zorder=2)
-                ax.scatter(pts[v, 0], pts[v, 1], c='red', s=30,zorder=2)
+    #     if ax is None:
+    #         fig, ax = plt.subplots()
+    #     #plot the nodes color if there is special nodes(input nodes or output nodes)
+    #     skip_edge=[]
+    #     ax.scatter(pts[:, 0], pts[:, 1], c='black', s=20,zorder=1)
+    #     if self.input is not None:
+    #         for edge, _, _ in self.input:
+    #             skip_edge.append(edge)
+    #             u, v = self.edges[edge]
+    #             ax.scatter(pts[u, 0], pts[u, 1], c='blue', s=30,zorder=2)
+    #             ax.scatter(pts[v, 0], pts[v, 1], c='blue', s=30,zorder=2)
+    #     if self.output is not None:
+    #         for edge, _, _ in self.output:
+    #             skip_edge.append(edge)
+    #             u, v = self.edges[edge]
+    #             ax.scatter(pts[u, 0], pts[u, 1], c='red', s=30,zorder=2)
+    #             ax.scatter(pts[v, 0], pts[v, 1], c='red', s=30,zorder=2)
         
-        for i, (u, v) in enumerate(self.edges):
-            if i in skip_edge:
-                continue
-            x = [pts[u, 0], pts[v, 0]]
-            y = [pts[u, 1], pts[v, 1]]
-            if isinstance(color,str):
-                ax.plot(x, y, c=color, linewidth=1,zorder=5)
-            else:
-                ax.plot(x, y, c=color[i], linewidth=1,zorder=5)
-        ax.set_aspect('equal')
+    #     for i, (u, v) in enumerate(self.edges):
+    #         if i in skip_edge:
+    #             continue
+    #         x = [pts[u, 0], pts[v, 0]]
+    #         y = [pts[u, 1], pts[v, 1]]
+    #         if isinstance(color,str):
+    #             ax.plot(x, y, c=color, linewidth=1,zorder=5)
+    #         else:
+    #             ax.plot(x, y, c=color[i], linewidth=1,zorder=5)
+    #     ax.set_aspect('equal')
 
     def plot_disp(self,disp,ax=None,scale=1.0, rigid: bool = False):
         dim=self.dim
@@ -255,26 +368,27 @@ class ENM:
         if ax is None:
             fig, ax = plt.subplots()
         
-        ax.scatter(pts[:, 0], pts[:, 1], c='black', s=20,zorder=1)
-        ax.scatter(pts0[:, 0], pts0[:, 1], c='grey', s=20,zorder=1)
+        ax.scatter(pts[:, 0], pts[:, 1], c='black', s=10,zorder=1)
+        ax.scatter(pts0[:, 0], pts0[:, 1], c='grey', s=10,zorder=1)
 
         skip_edge=[]
         if self.input is not None:
             for edge, _, _ in self.input:
                 skip_edge.append(edge)
                 u, v = self.edges[edge]
-                ax.scatter(pts[u, 0], pts[u, 1], c='blue', s=30,zorder=2)
-                ax.scatter(pts[v, 0], pts[v, 1], c='blue', s=30,zorder=2)
-                ax.scatter(pts0[u, 0], pts0[u, 1], c='blue', s=30,zorder=2)
-                ax.scatter(pts0[v, 0], pts0[v, 1], c='blue', s=30,zorder=2)
+                ax.scatter(pts[u, 0], pts[u, 1], c='blue', s=20,zorder=2)
+                ax.scatter(pts[v, 0], pts[v, 1], c='blue', s=20,zorder=2)
+                ax.scatter(pts0[u, 0], pts0[u, 1], c='blue', s=20,zorder=2,alpha=0.5)
+                ax.scatter(pts0[v, 0], pts0[v, 1], c='blue', s=20,zorder=2,alpha=0.5)
         if self.output is not None:
             for edge, _, _ in self.output:
                 skip_edge.append(edge)
                 u, v = self.edges[edge]
-                ax.scatter(pts[u, 0], pts[u, 1], c='red', s=30,zorder=2)
-                ax.scatter(pts[v, 0], pts[v, 1], c='red', s=30,zorder=2)
-                ax.scatter(pts0[u, 0], pts0[u, 1], c='red', s=30,zorder=2)
-                ax.scatter(pts0[v, 0], pts0[v, 1], c='red', s=30,zorder=2)
+                ax.scatter(pts[u, 0], pts[u, 1], c='red', s=20,zorder=2)
+                ax.scatter(pts[v, 0], pts[v, 1], c='red', s=20,zorder=2)
+                ax.scatter(pts0[u, 0], pts0[u, 1], c='red', s=20,zorder=2,alpha=0.5)
+                ax.scatter(pts0[v, 0], pts0[v, 1], c='red', s=20,zorder=2,alpha=0.5)
+               
         
         for i, (u, v) in enumerate(self.edges):
             if i in skip_edge:
@@ -287,6 +401,10 @@ class ENM:
             y0 = [pts0[u, 1], pts0[v, 1]]
             ax.plot(x0, y0, c='gray', linestyle='-', linewidth=1,zorder=4)
         ax.set_aspect('equal')
+        # if not isinstance(color, str):
+        #     sm = plt.cm.ScalarMappable(cmap=plt.cm.bwr, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+        #     sm.set_array([])
+        #     plt.colorbar(sm, ax=ax)
     
 
 
